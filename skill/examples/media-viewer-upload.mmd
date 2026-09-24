@@ -1,0 +1,21 @@
+%% Business flow: uploading a media file in media-viewer (Express + S3).
+%% Reconstructed from server.js: POST /upload, requireAuth gate, multer file
+%% check, PutObject to the S3 bucket, redirect back to the project page.
+bpmn LR
+  pool "Media Viewer"
+    start s1 "Upload requested"
+    xor g1 "Signed in?"
+    xor g2 "File attached?"
+    task:service t1 "Store file in bucket"
+    task t2 "Open project page"
+    end e1 "Upload complete"
+    end e2 "Sent to sign-in"
+    end e3 "No file, back to home"
+  pool "Object storage"
+    task o1 "Persist object"
+  s1 --> g1
+  g1 -- "signed in" --> g2
+  g1 -->|default| e2
+  g2 -- "file present" --> t1 --> t2 --> e1
+  g2 -->|default| e3
+  t1 ==> o1

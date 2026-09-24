@@ -1,0 +1,9 @@
+bpmn LR
+  start s1 "Start"
+  task t1 "Do work"
+  xor g1 "Approved?"
+  end e1 "Done"
+  s1 --> t1 --> g1
+  g1 --> e1
+  t1 -- "urgent" --> e1
+  s1 ==> t1
