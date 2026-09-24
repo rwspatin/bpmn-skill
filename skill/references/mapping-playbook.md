@@ -1,171 +1,188 @@
 # Mapping playbook — code → business BPMN
 
-The job is **reconstruction, not transcription**. You are recovering the business
-process a codebase implements, then drawing it in BPMN — not diagramming the call
-graph. A reader who doesn't know the codebase (a PM, an auditor) must understand
-the diagram.
+Reconstruct the business process, not the call graph. Code is evidence; a diagram is
+the smallest collaboration that explains a business trigger, work, decisions, waits,
+and outcomes to someone who has not read the code.
 
-## 0. Golden rules
+## 0. Decide what deserves a diagram
 
-- **One process per business capability**, not per file/route. "Checkout",
-  "Refund", "Subscription lifecycle" — each is its own `bpmn` diagram.
-- **Labels are business language.** `chargeCard()` → "Charge card". `orders` table
-  status `awaiting_payment` → "Awaiting payment". Never leak function/table/column
-  names into labels.
-- **Actors become pools/lanes.** The system under study is one pool; each external
-  party it talks to (customer, payment provider, email service, another service)
-  is its own pool, reached only by **message flows** (`==>`).
-- **Every diagram must pass `validate.mjs`.** Generate, validate, self-correct from
-  the catalogue, repeat until VALID. Then export XML / render.
+- **Business process:** changes a customer/order/case/contract state, commits money
+  or inventory, fulfils a promise, applies a policy, or communicates a business
+  result. Show the business action and outcome.
+- **Technical plumbing:** routing, DTO validation, auth middleware, serialization,
+  retries hidden inside an SDK, logging, metrics, cache, database reads, queue
+  acknowledgement, and internal helper calls. Normally omit it. Promote it only
+  when it creates a business decision, deadline, hand-off, or observable outcome.
+- **One capability per diagram:** `Checkout`, `Refund payment`, `Onboard merchant`,
+  `Recover failed subscription payment`—not “orders service” or one endpoint.
+  Split when a path has its own trigger/outcomes, another audience/owner, or would
+  make the main happy path hard to read. Link diagrams by a named business
+  message/outcome; do not put every lifecycle transition on one canvas.
 
-## 1. Discovery heuristics (per stack signal)
+## 1. Find evidence by architecture signal
 
-Scan for these signals; each maps to a BPMN construct.
+| Look for | Treat it as BPMN evidence | Usually model it as |
+|---|---|---|
+| REST/GraphQL command controller (`POST`, mutation) | A user/partner starts a business action. A `GET` normally does not. | Start; message start only when the caller is a separate participant and the message is shown. |
+| Queue/topic consumer | A business event may start or resume work. Queue mechanics alone do not. | Message start if it creates a new instance; intermediate message if it correlates to one already waiting. |
+| Queue producer | An asynchronous hand-off or published business fact. | A business task; use a named message flow only across participant pools. Keep an internal queue inside the pool. |
+| Saga/orchestrator | Coordination and compensating business outcomes across services. | Business tasks/gateways/messages, not “call step 3.” Model compensation as its business action/outcome; note unsupported boundary/compensation semantics in a comment. |
+| State machine/status enum | Candidate states and allowed transitions; inspect every writer and trigger. A stored status is not a task. | Tasks that cause transitions, XORs for alternative transitions, timer/message waits that cause later transitions. |
+| Cron/scheduler/TTL | Scheduled business initiation or an elapsed business deadline. | Timer start for an independent scheduled process; intermediate timer for a wait in the instance. Do not turn transport retry backoff into a business timer. |
+| Webhook | An inbound message from another participant. Check whether it has a correlation key. | Message start when it begins/reconciles a new process; intermediate message when it resolves a known pending request. |
+| Payment/FIX/email/SMS/partner adapter | The adapter boundary reveals a business request, confirmation, rejection, or settlement. Protocol parsing/serialization is plumbing. | Service task plus named message flows to a participant only when that participant matters to the reader. |
+| `if`/`switch` on policy/result | A distinct business result with a different next step. | XOR question with answer/end-state flow labels; default for the otherwise case. |
+| fan-out/join, `Promise.all`, workflow barrier | Work must all complete, or one-or-more selected paths must complete. | `and` fork **and matching join**; use `or` only for genuine one-or-more selection and join it correspondingly. |
 
-| Code signal | BPMN construct |
-|---|---|
-| HTTP route + handler that starts a user-visible action (`POST /checkout`) | a **start event** (or **message start** if triggered by an external caller/webhook) |
-| Inbound **webhook** endpoint (`POST /webhooks/stripe`) | **message event** (start if it kicks off a process, intermediate if the process waits for it) |
-| Handler calls another handler / service function | **sequence flow** between tasks |
-| `if / switch` on a status, role, amount, or result | **exclusive gateway** (`xor`), one branch per case, condition on the flow |
-| `Promise.all` / parallel jobs / "do A and B" with no ordering | **parallel gateway** (`and`) fork, join before the next step |
-| "any of these can happen" / multiple optional notifications | **inclusive gateway** (`or`) |
-| Call to an external API (payment, email/SMS, 3rd-party) | a **task:service** that emits a **message flow** to an **external pool** for that provider |
-| Queue producer → consumer (`queue.add` / `worker.process`) | a **task** followed by the consumer **task** (same pool) or a message flow if the consumer is a separate service/pool |
-| Cron job / scheduled retry / `setTimeout` / TTL / "after N days" | **timer** event (start if the job initiates the process, intermediate if the process waits) |
-| Status/`enum` field with a set of values | the **states** the process moves through; transitions between them are sequence flows, and the code that changes the status names the task that causes it |
-| `try/catch` with a compensating action (refund on failure) | a branch to a separate **end** (e.g. "Payment failed") — model the failure path, don't hide it |
-| `role`/`auth` checks gating a step | put the step in the **lane** of the role that performs it |
+Search quickly: route registrations and command handlers; consumer/subscriber and
+producer/publisher definitions; scheduler configuration; status/state declarations
+and assignments; webhook handlers; adapters/clients; and tests that assert an
+outcome. Follow the identifiers named there, not only imports.
 
-**Where to look, fast:** route tables / controllers, queue & worker definitions,
-cron/schedule config, `status`/`state` enums + the code that assigns them, webhook
-handlers, and any client for a payment/email/SMS/3rd-party API.
+## 2. Trace one flow across services
 
-## 2. Modeling procedure
+Start from a business command/event and make a small evidence table: **message or
+command**, **business key** (order/subscription/payment ID), **correlation/causation
+ID**, **producer**, **topic/endpoint**, **consumer**, **state changed**, **outcome**.
+Follow the same key through logs, payload schemas, outbox records, queue headers,
+and test fixtures. A correlation ID tells you whether a webhook/consumer resumes an
+existing instance (intermediate message) or creates a new one (message start).
 
-1. **Name the capability** and its trigger (user action? inbound webhook? schedule?).
-2. **List the actors.** System-under-study = one pool; each external party = a pool.
-   Roles inside the system that do distinct work = lanes.
-3. **Walk the happy path** as tasks in order; give each a business verb-phrase label.
-4. **Insert gateways** at every branch you found; label each outgoing flow with the
-   real condition (`"amount > 100"`, `"in stock"`, `"payment declined"`).
-5. **Add waits**: timers for delays/retries/TTLs, message events for awaited
-   webhooks/callbacks.
-6. **Add external pools + message flows** for each 3rd-party call.
-7. **Close every path** with a meaningful end event ("Shipped", "Rejected",
-   "Refunded"). Every node must reach one.
-8. **Validate → fix → repeat.** Then export `.bpmn` and/or render `.svg`.
+Do not make every microservice a pool. A pool represents a business participant
+with an independently meaningful process. Services that collectively perform work
+for the same company/capability normally stay in one pool; use lanes only for real
+roles/departments, not Kubernetes deployments. Use another pool when the diagram
+needs to show a customer, bank/payment provider, carrier, or independently owned
+partner process. Message flows are named business messages, never topic names.
 
-Keep the first cut to BPMN Level 1 Descriptive (this is what the DSL covers):
-start/end, tasks, xor/and/or gateways, pools/lanes, message flows, plus
-message/timer intermediate events. Note anything richer as a comment rather than
-forcing it.
+## 3. Discovery procedure
 
----
+1. **Inventory entry points.** List commands, inbound business events/webhooks,
+   schedules, and manual operations; discard reads and plumbing.
+2. **Cluster by capability.** Group entry points that share the same business object,
+   goal, and outcomes. Select one diagram-sized capability and state its boundary.
+3. **Trace the happy path.** Follow one business key across service calls, events,
+   queues, state changes, and partner interactions until an outcome is committed.
+4. **Add decisions and exceptions.** For each observed branch, identify the business
+   question, answer/end state, timeout, rejection, cancellation, or recovery. Do
+   not infer branches merely from generic error handling.
+5. **Place waits and participants.** Distinguish a received message from a sent
+   request; use correlation evidence. Add only meaningful participants and roles.
+6. **Name and close outcomes.** Give tasks verb–object labels and each end an
+   achieved business state. Split a separate capability when its trigger/outcome
+   no longer belongs to this instance. Then validate the DSL and perform the style
+   checklist in `SKILL.md`.
 
-## Worked example A — e-commerce checkout (Express routes)
+## 4. Modeling guardrails
 
-**Code observed (sketch):**
-```js
-app.post('/checkout', async (req, res) => {
-  const order = await createOrder(req.body);         // status: 'pending'
-  const stock = await inventory.reserve(order);      // if/else on stock
-  if (!stock.ok) { await markBackordered(order); return res.json({state:'backordered'}); }
-  const pay = await stripe.charge(order.total, req.body.card);  // external API
-  if (pay.status !== 'succeeded') { await markFailed(order); return res.json({state:'payment_failed'}); }
-  await Promise.all([ sendConfirmationEmail(order), warehouse.enqueuePick(order) ]); // parallel
-  await markPaid(order);                              // status: 'paid'
-});
-// worker: warehouse.process('pick', async (order) => { await pickAndPack(order); await markShipped(order); })
-```
+- A **pool** is a participant; a **lane** is a role within one participant.
+  Sequence flow may cross lanes but never pools. Message flow is named and crosses
+  pools only. An internal service call or queue is not, by itself, a participant.
+- A **start** event creates an instance. An **intermediate message** waits for an
+  expected correlated response during one. An **intermediate timer** is business
+  elapsed time during one. This DSL has catch events only: do not imply message
+  throws, boundary timers, duration expressions, or executable correlation rules.
+- An XOR gateway is a question with mutually exclusive outcomes. Label each
+  non-default branch with its answer/end state and give the data-based decision a
+  default unless exhaustive. The fixed grammar renders a default only as
+  `|default|`, so it cannot also render `No`; make its target self-explanatory.
+- Pair parallel/inclusive forks with the matching join before a continuation that
+  requires all/selected work. A merge XOR is only needed when it clarifies a
+  convergence; never use a parallel join to merge alternatives.
+- Tasks are imperative verb–object phrases ("Reserve inventory"). Events name what
+  happened/is awaited ("Receive payment result"). Ends name achieved business
+  outcomes ("Order shipped"), not "Done", HTTP responses, or screen navigation.
 
-**Signals → BPMN:** `POST /checkout` = start; `if (!stock.ok)` = xor; `stripe.charge`
-= service task + message flow to a **Payment provider** pool; `Promise.all` = parallel
-gateway; `sendConfirmationEmail` = service task + message flow to an **Email service**
-pool; the pick worker = a task in a **Warehouse** lane; each failure path = its own end.
+## Worked example A — checkout with external payment and email
 
-**DSL (validates clean):**
-```
+The code evidence is a checkout command, stock and payment results, a fan-out to
+confirmation and fulfilment, and payment/email adapters. The provider processes are
+shown only because the messages are material to the business collaboration.
+
+```mermaid
 bpmn LR
+  pool "Customer"
+    start c0 "Checkout needed"
+    task:user c1 "Submit checkout"
+    end c2 "Checkout submitted"
   pool "Shop"
-    lane "Checkout"
-      start s1 "Checkout requested"
+    lane "Sales"
+      start message s1 "Receive checkout request"
       task:service t1 "Reserve inventory"
-      xor g1 "In stock?"
-      task:service t2 "Charge card"
-      xor g2 "Payment ok?"
+      xor g1 "Items available?"
+      task:service t2 "Request payment"
+      intermediate message i1 "Receive payment result"
+      xor g2 "Payment approved?"
       and g3
-      task:service t3 "Send confirmation"
-      end e2 "Backordered"
-      end e3 "Payment failed"
-    lane "Warehouse"
-      task t4 "Pick & pack"
-      end e1 "Shipped"
+      task:service t3 "Send order confirmation"
+      end e2 "Order backordered"
+      end e3 "Payment rejected"
+    lane "Fulfilment"
+      task:user t4 "Pick and pack order"
+      and g4
+      task:user t5 "Dispatch order"
+      end e1 "Order shipped"
   pool "Payment provider"
-    task tp "Process charge"
+    start message ps1 "Receive payment request"
+    task:service pt1 "Process payment"
+    end pe1 "Payment result sent"
   pool "Email service"
-    task te "Deliver email"
+    start message es1 "Receive confirmation request"
+    task:service et1 "Deliver confirmation"
+    end ee1 "Confirmation delivered"
+  c0 --> c1 --> c2
+  c1 ==>|"Checkout request"| s1
   s1 --> t1 --> g1
-  g1 -- "in stock" --> t2
+  g1 -- "Yes" --> t2 --> i1 --> g2
   g1 -->|default| e2
-  t2 --> g2
-  g2 -- "succeeded" --> g3
+  g2 -- "Yes" --> g3
   g2 -->|default| e3
-  g3 --> t3 --> e1
-  g3 --> t4 --> e1
-  t2 ==> tp
-  t3 ==> te
+  g3 --> t3 --> g4
+  g3 --> t4 --> g4
+  g4 --> t5 --> e1
+  t2 ==>|"Payment request"| ps1
+  pt1 ==>|"Payment result"| i1
+  ps1 --> pt1 --> pe1
+  t3 ==>|"Confirmation request"| es1
+  es1 --> et1 --> ee1
 ```
 
-## Worked example B — subscription lifecycle (status enum + webhooks)
+## Worked example B — recover a failed subscription payment
 
-**Code observed (sketch):**
-```ts
-type SubStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
-// POST /webhooks/stripe
-switch (event.type) {
-  case 'invoice.paid':          setStatus(sub, 'active'); break;
-  case 'invoice.payment_failed':setStatus(sub, 'past_due'); scheduleRetry(sub, '3d'); break;
-  case 'customer.subscription.deleted': setStatus(sub, 'canceled'); break;
-}
-// cron daily: if (sub.status==='past_due' && daysPastDue > 7) cancel(sub);
-```
+The status enum supplies states, but the process is derived from the writers:
+scheduled invoice due, request/reply with the provider, dunning delay, retry, and
+cancellation. The repeated wait is one correlated payment-result event, not a new
+unrelated webhook process.
 
-**Signals → BPMN:** trial start = start event; the Stripe webhook = **message**
-events (the process waits for billing events → intermediate message); the
-`past_due` retry `scheduleRetry(…, '3d')` and the 7-day dunning cron = **timer**
-events; the status enum values are the states the process passes through; Stripe is
-an external pool sending message flows in.
-
-**DSL (validates clean):**
-```
+```mermaid
 bpmn LR
   pool "Billing system"
-    start s1 "Trial started"
-    intermediate timer i1 "Trial ends"
-    task:service t1 "Attempt first charge"
-    xor g1 "Charge result?"
-    task t2 "Activate subscription"
-    intermediate timer i2 "Wait for retry (3 days)"
+    start timer s1 "Invoice due"
+    task:service t1 "Request charge"
+    intermediate message i1 "Receive payment result"
+    xor g1 "Payment received?"
+    task:service t2 "Activate subscription"
+    intermediate timer i2 "Wait 3 days"
+    xor g2 "Within dunning window?"
     task:service t3 "Retry charge"
-    xor g2 "Retry result?"
-    intermediate timer i3 "Grace period (7 days)"
-    task t4 "Cancel subscription"
-    end e1 "Active"
-    end e2 "Canceled"
+    task:service t4 "Cancel subscription"
+    end e1 "Subscription active"
+    end e2 "Subscription canceled"
   pool "Payment provider"
-    task tp "Billing events"
-  s1 --> i1 --> t1 --> g1
-  g1 -- "paid" --> t2 --> e1
-  g1 -->|default| i2
-  i2 --> t3 --> g2
-  g2 -- "paid" --> t2
-  g2 -->|default| i3
-  i3 --> t4 --> e2
-  t1 ==> tp
-  t3 ==> tp
+    start message ps1 "Receive charge request"
+    task:service pt1 "Process charge"
+    end pe1 "Payment result sent"
+  s1 --> t1 --> i1 --> g1
+  g1 -- "Yes" --> t2 --> e1
+  g1 -->|default| i2 --> g2
+  g2 -- "Yes" --> t3 --> i1
+  g2 -->|default| t4 --> e2
+  t1 ==>|"Charge request"| ps1
+  t3 ==>|"Charge request"| ps1
+  pt1 ==>|"Payment result"| i1
+  ps1 --> pt1 --> pe1
 ```
 
-Both examples were run through `validate.mjs` and export cleanly to bpmn.io. When
-your first draft fails validation, the catalogue message names the exact fix —
-apply it and re-run; do not guess.
+Both are intended to be valid fixed-DSL examples. The validator checks structural
+rules; it cannot prove that a timer duration, correlation key, gateway question, or
+participant boundary is semantically correct—review those against the code evidence.

@@ -1,16 +1,20 @@
 bpmn LR
   pool "Customer"
-    task:user c1 "Place order"
+    start c0 "Order needed"
+    task:user c1 "Submit order"
+    end c2 "Order submitted"
   pool "Shop"
     lane "Sales"
-      start message s1 "Order received"
+      start message s1 "Receive order"
       task:user t1 "Review order"
-      xor g1 "In stock?"
+      xor g1 "Items available?"
     lane "Warehouse"
-      task:service t2 "Pick & pack"
-      end e1 "Shipped"
-      end e2 "Backordered"
+      task:user t2 "Pick and pack order"
+      task:user t3 "Dispatch order"
+      end e1 "Order shipped"
+      end e2 "Order backordered"
+  c0 --> c1 --> c2
   s1 --> t1 --> g1
-  g1 -- "in stock" --> t2 --> e1
+  g1 -- "Yes" --> t2 --> t3 --> e1
   g1 -->|default| e2
-  c1 ==> s1
+  c1 ==>|"Order"| s1

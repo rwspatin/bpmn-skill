@@ -1,123 +1,148 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_bpmn" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant___pool_customer" name="Customer" processRef="Process___pool_customer" />
     <bpmn:participant id="Participant___pool_media_viewer" name="Media Viewer" processRef="Process___pool_media_viewer" />
-    <bpmn:participant id="Participant___pool_object_storage" name="Object storage" processRef="Process___pool_object_storage" />
-    <bpmn:messageFlow id="__flow_8" sourceRef="t1" targetRef="o1" />
+    <bpmn:messageFlow id="__flow_3" name="Upload request" sourceRef="c1" targetRef="s1" />
   </bpmn:collaboration>
-  <bpmn:process id="Process___pool_media_viewer" isExecutable="false">
-    <bpmn:startEvent id="s1" name="Upload requested">
+  <bpmn:process id="Process___pool_customer" isExecutable="false">
+    <bpmn:startEvent id="c0" name="Upload needed">
       <bpmn:outgoing>__flow_1</bpmn:outgoing>
     </bpmn:startEvent>
-    <bpmn:exclusiveGateway id="g1" name="Signed in?" default="__flow_3">
+    <bpmn:userTask id="c1" name="Submit media file">
       <bpmn:incoming>__flow_1</bpmn:incoming>
       <bpmn:outgoing>__flow_2</bpmn:outgoing>
-      <bpmn:outgoing>__flow_3</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-    <bpmn:exclusiveGateway id="g2" name="File attached?" default="__flow_7">
+    </bpmn:userTask>
+    <bpmn:endEvent id="c2" name="Upload submitted">
       <bpmn:incoming>__flow_2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="__flow_1" sourceRef="c0" targetRef="c1"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="__flow_2" sourceRef="c1" targetRef="c2"></bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmn:process id="Process___pool_media_viewer" isExecutable="false">
+    <bpmn:startEvent id="s1" name="Receive upload request">
       <bpmn:outgoing>__flow_4</bpmn:outgoing>
-      <bpmn:outgoing>__flow_7</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-    <bpmn:serviceTask id="t1" name="Store file in bucket">
+      <bpmn:messageEventDefinition id="s1_def" />
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="g1" name="Signed in?" default="__flow_6">
       <bpmn:incoming>__flow_4</bpmn:incoming>
       <bpmn:outgoing>__flow_5</bpmn:outgoing>
-    </bpmn:serviceTask>
-    <bpmn:task id="t2" name="Open project page">
-      <bpmn:incoming>__flow_5</bpmn:incoming>
       <bpmn:outgoing>__flow_6</bpmn:outgoing>
-    </bpmn:task>
-    <bpmn:endEvent id="e1" name="Upload complete">
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="g2" name="File attached?" default="__flow_10">
+      <bpmn:incoming>__flow_5</bpmn:incoming>
+      <bpmn:outgoing>__flow_7</bpmn:outgoing>
+      <bpmn:outgoing>__flow_10</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="t1" name="Store media file">
+      <bpmn:incoming>__flow_7</bpmn:incoming>
+      <bpmn:outgoing>__flow_8</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="t2" name="Confirm upload">
+      <bpmn:incoming>__flow_8</bpmn:incoming>
+      <bpmn:outgoing>__flow_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="e1" name="Media uploaded">
+      <bpmn:incoming>__flow_9</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="e2" name="Sign-in required">
       <bpmn:incoming>__flow_6</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:endEvent id="e2" name="Sent to sign-in">
-      <bpmn:incoming>__flow_3</bpmn:incoming>
+    <bpmn:endEvent id="e3" name="File required">
+      <bpmn:incoming>__flow_10</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:endEvent id="e3" name="No file, back to home">
-      <bpmn:incoming>__flow_7</bpmn:incoming>
-    </bpmn:endEvent>
-    <bpmn:sequenceFlow id="__flow_1" sourceRef="s1" targetRef="g1"></bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_2" name="signed in" sourceRef="g1" targetRef="g2">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">signed in</bpmn:conditionExpression>
+    <bpmn:sequenceFlow id="__flow_4" sourceRef="s1" targetRef="g1"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="__flow_5" name="Yes" sourceRef="g1" targetRef="g2">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Yes</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_3" sourceRef="g1" targetRef="e2"></bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_4" name="file present" sourceRef="g2" targetRef="t1">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">file present</bpmn:conditionExpression>
+    <bpmn:sequenceFlow id="__flow_6" sourceRef="g1" targetRef="e2"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="__flow_7" name="Yes" sourceRef="g2" targetRef="t1">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Yes</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_5" sourceRef="t1" targetRef="t2"></bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_6" sourceRef="t2" targetRef="e1"></bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="__flow_7" sourceRef="g2" targetRef="e3"></bpmn:sequenceFlow>
-  </bpmn:process>
-  <bpmn:process id="Process___pool_object_storage" isExecutable="false">
-    <bpmn:task id="o1" name="Persist object">
-    </bpmn:task>
+    <bpmn:sequenceFlow id="__flow_8" sourceRef="t1" targetRef="t2"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="__flow_9" sourceRef="t2" targetRef="e1"></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="__flow_10" sourceRef="g2" targetRef="e3"></bpmn:sequenceFlow>
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="Shape_Participant___pool_customer" bpmnElement="Participant___pool_customer" isHorizontal="true">
+        <dc:Bounds x="40" y="40" width="540" height="120" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Participant___pool_media_viewer" bpmnElement="Participant___pool_media_viewer" isHorizontal="true">
-        <dc:Bounds x="40" y="40" width="1080" height="220" />
+        <dc:Bounds x="40" y="200" width="1080" height="220" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Shape_Participant___pool_object_storage" bpmnElement="Participant___pool_object_storage" isHorizontal="true">
-        <dc:Bounds x="40" y="300" width="180" height="120" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Shape_s1" bpmnElement="s1">
+      <bpmndi:BPMNShape id="Shape_c0" bpmnElement="c0">
         <dc:Bounds x="127" y="82" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_c1" bpmnElement="c1">
+        <dc:Bounds x="270" y="65" width="110" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_c2" bpmnElement="c2">
+        <dc:Bounds x="487" y="82" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_s1" bpmnElement="s1">
+        <dc:Bounds x="127" y="242" width="36" height="36" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_g1" bpmnElement="g1">
-        <dc:Bounds x="300" y="75" width="50" height="50" />
+        <dc:Bounds x="300" y="235" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_g2" bpmnElement="g2">
-        <dc:Bounds x="480" y="75" width="50" height="50" />
+        <dc:Bounds x="480" y="235" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_t1" bpmnElement="t1">
-        <dc:Bounds x="630" y="65" width="110" height="70" />
+        <dc:Bounds x="630" y="225" width="110" height="70" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_t2" bpmnElement="t2">
-        <dc:Bounds x="810" y="65" width="110" height="70" />
+        <dc:Bounds x="810" y="225" width="110" height="70" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_e1" bpmnElement="e1">
-        <dc:Bounds x="1027" y="82" width="36" height="36" />
+        <dc:Bounds x="1027" y="242" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_e2" bpmnElement="e2">
-        <dc:Bounds x="487" y="182" width="36" height="36" />
+        <dc:Bounds x="487" y="342" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_e3" bpmnElement="e3">
-        <dc:Bounds x="667" y="182" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Shape_o1" bpmnElement="o1">
-        <dc:Bounds x="90" y="325" width="110" height="70" />
+        <dc:Bounds x="667" y="342" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Edge___flow_1" bpmnElement="__flow_1">
         <di:waypoint x="163" y="100" />
-        <di:waypoint x="300" y="100" />
+        <di:waypoint x="270" y="100" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_2" bpmnElement="__flow_2">
-        <di:waypoint x="350" y="100" />
-        <di:waypoint x="480" y="100" />
+        <di:waypoint x="380" y="100" />
+        <di:waypoint x="487" y="100" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_3" bpmnElement="__flow_3">
-        <di:waypoint x="350" y="100" />
-        <di:waypoint x="487" y="200" />
+        <di:waypoint x="325" y="135" />
+        <di:waypoint x="145" y="242" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_4" bpmnElement="__flow_4">
-        <di:waypoint x="530" y="100" />
-        <di:waypoint x="630" y="100" />
+        <di:waypoint x="163" y="260" />
+        <di:waypoint x="300" y="260" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_5" bpmnElement="__flow_5">
-        <di:waypoint x="740" y="100" />
-        <di:waypoint x="810" y="100" />
+        <di:waypoint x="350" y="260" />
+        <di:waypoint x="480" y="260" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_6" bpmnElement="__flow_6">
-        <di:waypoint x="920" y="100" />
-        <di:waypoint x="1027" y="100" />
+        <di:waypoint x="350" y="260" />
+        <di:waypoint x="487" y="360" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_7" bpmnElement="__flow_7">
-        <di:waypoint x="530" y="100" />
-        <di:waypoint x="667" y="200" />
+        <di:waypoint x="530" y="260" />
+        <di:waypoint x="630" y="260" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge___flow_8" bpmnElement="__flow_8">
-        <di:waypoint x="685" y="135" />
-        <di:waypoint x="145" y="325" />
+        <di:waypoint x="740" y="260" />
+        <di:waypoint x="810" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge___flow_9" bpmnElement="__flow_9">
+        <di:waypoint x="920" y="260" />
+        <di:waypoint x="1027" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge___flow_10" bpmnElement="__flow_10">
+        <di:waypoint x="530" y="260" />
+        <di:waypoint x="667" y="360" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
