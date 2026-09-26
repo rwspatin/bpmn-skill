@@ -14,7 +14,15 @@ import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const FORK = process.env.BPMN_MERMAID_FORK || '/Users/rwspatin/git/personal/mermaid';
+const FORK = process.env.BPMN_MERMAID_FORK;
+if (!FORK) {
+  console.error(
+    'BPMN_MERMAID_FORK is not set. Point it at a checkout of ' +
+      'https://github.com/rwspatin/mermaid (branch feat/bpmn-diagram) with ' +
+      '`pnpm install` already run.'
+  );
+  process.exit(2);
+}
 const out = resolve(here, '../vendor/bpmn-core.mjs');
 const builder = resolve(here, 'build-core.mts');
 const tsxCli = resolve(FORK, 'node_modules/tsx/dist/cli.mjs');

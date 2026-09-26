@@ -14,14 +14,22 @@
  * Requirements:
  *   - Node >= 22
  *   - The fork checked out and BUILT: cd <fork> && pnpm build:mermaid
- *   - BPMN_MERMAID_FORK env var, or the default path below.
+ *   - BPMN_MERMAID_FORK env var pointing at that checkout (required, no default).
  */
 import { readFileSync, writeFileSync, createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { resolve, join, normalize, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const FORK = process.env.BPMN_MERMAID_FORK || '/Users/rwspatin/git/personal/mermaid';
+const FORK = process.env.BPMN_MERMAID_FORK;
+if (!FORK) {
+  console.error(
+    'BPMN_MERMAID_FORK is not set. Clone https://github.com/rwspatin/mermaid, ' +
+      'checkout feat/bpmn-diagram, build it (pnpm install && pnpm build:mermaid), ' +
+      'then export BPMN_MERMAID_FORK=/path/to/that/checkout.'
+  );
+  process.exit(2);
+}
 const [file, out] = process.argv.slice(2);
 if (!file || !out) {
   console.error('usage: render.mjs <file.mmd> <out.svg>');
