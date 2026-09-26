@@ -8,8 +8,9 @@ payment/auth/email flows) and it reconstructs the business process behind
 them: actors become pools/lanes, decisions become gateways, waits/timeouts
 become timer events, inbound webhooks become message events. The diagram is
 always run through a real parser and semantic validator before it's handed
-back, so what you get is guaranteed structurally correct BPMN, not prose that
-looks like a diagram — and you can open it directly in
+back, so it passes structural checks (reachability, start/end rules, pool
+crossing, known ids). Whether it models your process correctly still needs a
+human review against the code. You can open it directly in
 [bpmn.io](https://demo.bpmn.io/) or Camunda Modeler.
 
 ## Example
@@ -119,7 +120,7 @@ a compiled bundle of that fork's parser/validator/exporter
 `validate.mjs`/`export-xml.mjs` run standalone, and calls the fork's real
 built renderer for `render.mjs`.
 
-Two upstream PRs track getting this DSL into Mermaid itself:
+Two upstream PRs track getting BPMN, and this skill's AI-first layer, into Mermaid:
 
 - [mermaid-js/mermaid#8313](https://github.com/mermaid-js/mermaid/pull/8313)
   — the author's draft PR adding this `bpmn` diagram type and its XML export
