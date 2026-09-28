@@ -6,8 +6,9 @@ description: Reconstruct an application's BUSINESS processes from its code and e
 # BPMN Mapper
 
 Turn a codebase into **business** BPMN diagrams. The output is our Mermaid `bpmn`
-DSL, always run through a real parser+validator so it is guaranteed correct, plus
-optional SVG and BPMN 2.0 XML (opens laid-out in bpmn.io / Camunda Modeler).
+DSL, always run through a real parser+validator (structural correctness) and a
+style linter, plus optional SVG and BPMN 2.0 XML (opens laid-out in bpmn.io /
+Camunda Modeler). Whether it models the right process still needs human review.
 
 This is **reconstruction, not transcription** — recover the business process, don't
 diagram the call graph. Labels are business language ("Charge card", "Awaiting
