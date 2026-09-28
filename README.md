@@ -76,6 +76,7 @@ self-correcting error catalogue in action.
      git checkout feat/bpmn-diagram
      pnpm install
      pnpm build:mermaid
+     pnpm exec playwright install chromium   # browser used for headless rendering
      export BPMN_MERMAID_FORK="$(pwd)"   # required — render.mjs has no default path
      ```
 

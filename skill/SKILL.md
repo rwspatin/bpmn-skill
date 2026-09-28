@@ -48,7 +48,9 @@ node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real 
 - `render.mjs` needs the Mermaid fork checked out **and built**
   (`cd <fork> && pnpm build:mermaid`) because rendering uses the full renderer in
   headless Chromium (via the fork's Playwright). Point it at the fork with
-  `BPMN_MERMAID_FORK=/path/to/mermaid` (required — there is no default).
+  `BPMN_MERMAID_FORK=/path/to/mermaid` (required — there is no default). If it
+  fails to launch the browser on a new machine, run
+  `pnpm exec playwright install chromium` in the fork.
 - To regenerate the vendored bundle after the DSL/validator/exporter changes in the
   fork: `BPMN_MERMAID_FORK=/path/to/mermaid node scripts/lib/rebuild.mjs`.
 
