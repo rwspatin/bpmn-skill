@@ -1,0 +1,12 @@
+bpmn LR
+  pool "Customer"
+    start c0 "Order needed"
+    task c1 "Submit order"
+    end c2 "Order submitted"
+  pool "Shop"
+    start message s1 "Receive order"
+    task t1 "Process order"
+    end e1 "Order handled"
+  c0 --> c1 --> c2
+  s1 --> t1 --> e1
+  c1 ==> s1

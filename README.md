@@ -64,9 +64,9 @@ self-correcting error catalogue in action.
    ln -s "$(pwd)/bpmn-skill/skill" ~/.claude/skills/bpmn-mapper
    ```
 3. Requires **Node >= 22**.
-   - `validate.mjs` and `export-xml.mjs` are self-contained (they use a
-     vendored, pre-built parser/exporter bundle) and work fully offline —
-     nothing further to install for those two.
+   - `validate.mjs`, `lint.mjs` and `export-xml.mjs` are self-contained (they
+     use a vendored, pre-built parser/exporter bundle) and work fully offline —
+     nothing further to install for those three.
    - `render.mjs` (SVG preview) needs the Mermaid fork this skill's `bpmn`
      DSL comes from, checked out and built, because it drives the real
      renderer in headless Chromium:
@@ -86,9 +86,16 @@ From `skill/`:
 
 ```sh
 node scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or catalogue errors (exit 1)
+node scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1)
 node scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
 node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG preview (needs BPMN_MERMAID_FORK, see above)
 ```
+
+`lint.mjs` is a deterministic style linter that runs after `validate.mjs`: it
+checks the BPMN method/style rules (question-labeled gateways, labeled and
+default branches, parallel split/join pairing, named start/end events and
+message flows, business-language labels) and prints self-correcting warnings,
+so those checks live in the CLI rather than only in the skill's prose.
 
 As a Claude Code skill, the normal path is conversational: ask Claude to map
 a codebase's business flows to BPMN, and it follows `skill/SKILL.md`'s
@@ -106,7 +113,8 @@ the full workflow and modeling rules.
     self-correcting error catalogue.
   - `references/mapping-playbook.md` — code→BPMN heuristics + worked
     examples.
-  - `scripts/` — `validate.mjs`, `export-xml.mjs`, `render.mjs`, plus
+  - `scripts/` — `validate.mjs`, `lint.mjs` (+ `lint.test.mjs`,
+    `test-fixtures/`), `export-xml.mjs`, `render.mjs`, plus
     `vendor/bpmn-core.mjs` (the vendored parser bundle) and
     `lib/rebuild.mjs` (regenerates that bundle from the fork).
   - `examples/` — validated `.mmd` files (+ `.bpmn`, `.svg`).

@@ -1,0 +1,10 @@
+bpmn LR
+  start s0 "Order received"
+  and g1
+  task t1 "Charge card"
+  task t2 "Reserve stock"
+  end e1 "Card charged"
+  end e2 "Stock reserved"
+  s0 --> g1
+  g1 --> t1 --> e1
+  g1 --> t2 --> e2

@@ -30,7 +30,11 @@ payment"), never function or table names.
    `VALID` or the semantic-error catalogue — each message contains the exact fix
    (`references/dsl-spec.md` Part 2). Apply the fix, re-run, repeat until VALID.
    **Never ship un-validated DSL.**
-5. **Deliver** `.mmd`, and when asked: `scripts/render.mjs` for a `.svg` preview and
+5. **Lint the style.** Once VALID, run `scripts/lint.mjs <file.mmd>`. It prints
+   `CLEAN` or method/style **warnings** (rules L1–L8, same self-correcting format as
+   the validator: rule id, element, problem, fix). Fix each warning and re-run until
+   `CLEAN`, **or** each remaining warning is a deliberate, documented exception.
+6. **Deliver** `.mmd`, and when asked: `scripts/render.mjs` for a `.svg` preview and
    `scripts/export-xml.mjs` for a `.bpmn` file the user can open in bpmn.io.
 
 ## Scripts
@@ -39,11 +43,12 @@ Node >= 22 (the fork's toolchain needs it). From `skill/`:
 
 ```sh
 node scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or catalogue errors (exit 1)
+node scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1); exit 2 if it fails validate first
 node scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
 node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real glyphs/swimlanes)
 ```
 
-- `validate.mjs` and `export-xml.mjs` use a **vendored, self-contained parser
+- `validate.mjs`, `lint.mjs` and `export-xml.mjs` use a **vendored, self-contained parser
   bundle** (`scripts/vendor/bpmn-core.mjs`) — no build, no network, works offline.
 - `render.mjs` needs the Mermaid fork checked out **and built**
   (`cd <fork> && pnpm build:mermaid`) because rendering uses the full renderer in
@@ -81,6 +86,20 @@ node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real 
 The fixed DSL represents a default flow only as `|default|`; it cannot also display
 an answer label on that same flow. Use a question gateway, label the non-default
 answers, and make the default target unambiguous. Do not invent extra syntax.
+
+**What `lint.mjs` now checks automatically** (run it after validate): the style
+rules above are enforced deterministically as warnings L1–L8 — L1 xor/or labels are
+questions; L2 non-default branches are labeled; L3 a *binary* data-based xor/or
+has a `default` unless its two answers are complementary (3+-outcome gateways are
+treated as exhaustive); L4 `and` splits pair with `and` joins; L5 end
+events are named business outcomes (not generic terminators); L6 message flows are
+named; L7 start events are named business triggers; L8 labels are business language,
+not code identifiers. See `references/dsl-spec.md` for the exact messages. What lint
+**cannot** judge and still needs human review: whether the diagram models the *right*
+business capability, whether a pool is a real participant vs. an internal module,
+whether a decision is truly mutually exclusive (`xor`) vs. one-or-more (`or`), whether
+a wait is genuinely a business timer vs. a faked activity timeout, and whether every
+business alternative (exception/timeout/cancellation) is actually represented.
 
 ## References
 

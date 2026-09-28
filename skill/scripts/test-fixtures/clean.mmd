@@ -1,0 +1,16 @@
+bpmn LR
+  start s0 "Order received"
+  xor g1 "Approved?"
+  and g2
+  task t1 "Charge card"
+  task t2 "Reserve stock"
+  and g3
+  task t4 "Ship order"
+  end e1 "Order shipped"
+  end e2 "Order rejected"
+  s0 --> g1
+  g1 -- "Yes" --> g2
+  g1 -->|default| e2
+  g2 --> t1 --> g3
+  g2 --> t2 --> g3
+  g3 --> t4 --> e1

@@ -137,3 +137,39 @@ the real offending values at runtime.
   fix the typo.
 - `duplicate id '<id>' (first declared on line N).` → rename one; ids must be
   unique.
+
+---
+
+## Part 3 — style lint (warnings)
+
+`lint.mjs` runs *after* `validate.mjs` (a diagram that does not pass `validate.mjs`
+cannot be linted — it exits 2 and tells you to fix validation first). It prints
+`CLEAN`, or one **warning** per style issue in the same self-correcting format —
+`<rule>  <element>: <what is wrong>. Fix: <concrete fix>.` — exiting 1 if any fire
+(`--json` prints an array of `{rule, elementId, message, fix}`). Warnings are advisory
+method/style checks, not hard validation errors; clear them or keep each as a
+deliberate, documented exception. Heuristics are deliberately conservative to avoid
+false positives.
+
+- **L1** — a diverging `xor`/`or` gateway's label is not a question (does not end
+  with `?`). → phrase the decision as a question so its branches read as answers.
+- **L2** — a non-default outgoing branch of a diverging `xor`/`or` gateway has no
+  label. → label it with the answer/end state, or mark it `|default|`.
+- **L3** — a *binary* diverging data-based `xor`/`or` gateway (exactly two branches)
+  has no `default` flow and its two answers are not a complementary pair (Yes/No or
+  True/False). → add a `|default|` branch, or keep the two answers complementary.
+  Gateways that enumerate 3+ distinct labeled outcomes are treated as an exhaustive
+  outcome set and are not flagged; event-based gateways are exempt (the DSL has none).
+- **L4** — parallel pairing: an `and` split's branches do not reconverge at a single
+  matching `and` join before an end event or shared continuation (they end
+  separately, or merge at a non-`and` node), or an `and` join does not synchronize
+  branches from one common `and` split. → fork with `and` and join with `and`.
+- **L5** — an end event has no label or a generic terminator (`done`, `end`,
+  `finish(ed)`, `complete(d)`, `stop`, `success`, `fail(ed)`, `error`, `exit`). →
+  name the achieved business outcome (e.g. "Order shipped").
+- **L6** — a message flow (`==>`) has no name. → name the business message.
+- **L7** — a start event has no label or a generic trigger (`start`, `begin`,
+  `init`). → name the business trigger that creates the instance.
+- **L8** — a task/gateway/event label looks like a code identifier (`_`, `()`, `::`,
+  a dotted.path, camelCase/PascalCase with no spaces) or equals its own element id.
+  → use plain business language, not function/table/variable names.

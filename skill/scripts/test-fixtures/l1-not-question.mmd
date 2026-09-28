@@ -1,0 +1,9 @@
+bpmn LR
+  start s0 "Order received"
+  xor g1 "Check approval"
+  task t1 "Charge card"
+  end e1 "Order approved"
+  end e2 "Order rejected"
+  s0 --> g1
+  g1 -- "Yes" --> t1 --> e1
+  g1 -->|default| e2
