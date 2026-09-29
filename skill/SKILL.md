@@ -32,16 +32,16 @@ payment"), never function or table names.
    checklist below and the procedure in `references/mapping-playbook.md`.
 3. **Emit** the DSL following `references/dsl-spec.md` (Part 1 is prompt-ready and
    can be pasted into a sub-prompt if you delegate generation).
-4. **Validate & self-correct.** Run `${CLAUDE_SKILL_DIR}/scripts/validate.mjs <file.mmd>`.
+4. **Validate & self-correct.** Run `node ${CLAUDE_SKILL_DIR}/scripts/validate.mjs <file.mmd>`.
    It prints `VALID` or the semantic-error catalogue — each message contains the exact fix
    (`references/dsl-spec.md` Part 2). Apply the fix, re-run, repeat until VALID.
    **Never ship un-validated DSL.**
-5. **Lint the style.** Once VALID, run `${CLAUDE_SKILL_DIR}/scripts/lint.mjs <file.mmd>`.
+5. **Lint the style.** Once VALID, run `node ${CLAUDE_SKILL_DIR}/scripts/lint.mjs <file.mmd>`.
    It prints `CLEAN` or method/style **warnings** (rules L1–L8, same self-correcting format
    as the validator: rule id, element, problem, fix). Fix each warning and re-run until
    `CLEAN`, **or** each remaining warning is a deliberate, documented exception.
-6. **Deliver** `.mmd`, and when asked: `${CLAUDE_SKILL_DIR}/scripts/render.mjs` for a `.svg`
-   preview and `${CLAUDE_SKILL_DIR}/scripts/export-xml.mjs` for a `.bpmn` file the user can
+6. **Deliver** `.mmd`, and when asked: `node ${CLAUDE_SKILL_DIR}/scripts/render.mjs` for a `.svg`
+   preview and `node ${CLAUDE_SKILL_DIR}/scripts/export-xml.mjs` for a `.bpmn` file the user can
    open in bpmn.io.
    Every delivered `.mmd` **must** carry provenance in its header — one
    `%% source: <repo-name> <full-commit-sha> <YYYY-MM-DD>` line per source repo
