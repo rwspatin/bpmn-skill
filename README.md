@@ -48,7 +48,8 @@ Rendered (`skill/examples/order-fulfillment.svg`):
 `skill/examples/order-fulfillment.bpmn` is the same flow exported as BPMN 2.0
 XML with layout (BPMNDI) — open it in bpmn.io or Camunda Modeler.
 `skill/examples/media-viewer-upload.mmd` is a second, real example mapped
-end-to-end from an Express app. `skill/examples/broken-example.mmd` is
+end-to-end from an Express app, carrying the `%% source:` provenance and
+`%% evidence` comments used to keep maps up to date. `skill/examples/broken-example.mmd` is
 deliberately invalid — run it through `validate.mjs` to see the
 self-correcting error catalogue in action.
 
@@ -64,9 +65,10 @@ self-correcting error catalogue in action.
    ln -s "$(pwd)/bpmn-skill/skill" ~/.claude/skills/bpmn-mapper
    ```
 3. Requires **Node >= 22**.
-   - `validate.mjs`, `lint.mjs` and `export-xml.mjs` are self-contained (they
-     use a vendored, pre-built parser/exporter bundle) and work fully offline —
-     nothing further to install for those three.
+   - `validate.mjs`, `lint.mjs`, `export-xml.mjs` and `diff-map.mjs` are
+     self-contained (they use a vendored, pre-built parser/exporter bundle) and
+     work fully offline — nothing further to install for those.
+     `changed-since.mjs` additionally needs `git` on the PATH.
    - `render.mjs` (SVG preview) needs the Mermaid fork this skill's `bpmn`
      DSL comes from, checked out and built, because it drives the real
      renderer in headless Chromium:
@@ -89,6 +91,8 @@ node scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or
 node scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1)
 node scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
 node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG preview (needs BPMN_MERMAID_FORK, see above)
+node scripts/changed-since.mjs <map-dir> --repo <name>=<path> [--json]  # -> which diagrams/rules the code changed since the map was traced
+node scripts/diff-map.mjs   old.mmd new.mmd [--json]    # -> semantic diff of two diagrams (by id) + id-churn hints
 ```
 
 `lint.mjs` is a deterministic style linter that runs after `validate.mjs`: it
@@ -97,12 +101,51 @@ default branches, parallel split/join pairing, named start/end events and
 message flows, business-language labels) and prints self-correcting warnings,
 so those checks live in the CLI rather than only in the skill's prose.
 
+`changed-since.mjs` and `diff-map.mjs` drive incremental updates (next
+section). `changed-since.mjs` exits 0 when nothing is affected, 1 when a diagram
+or rule is affected, 2 on usage/git errors; `diff-map.mjs` exits 0 for no
+semantic change, 1 for changes, 2 if a file does not parse/validate. Both take
+`--json`.
+
 As a Claude Code skill, the normal path is conversational: ask Claude to map
 a codebase's business flows to BPMN, and it follows `skill/SKILL.md`'s
 workflow — discover flows, model them per `skill/references/mapping-playbook.md`,
 emit the DSL per `skill/references/dsl-spec.md`, validate and self-correct
 with `validate.mjs`, then optionally render/export. See `skill/SKILL.md` for
 the full workflow and modeling rules.
+
+## Keeping maps up to date
+
+Re-running the skill on a codebase it already mapped does **not** regenerate
+the map. Every diagram records where it was traced from:
+
+```
+%% source: media-viewer b97c9bf93725c4585e1bdf2078e4f7f8ee7467b2 2026-09-24
+%% evidence t1: media-viewer:server.js:318-328
+```
+
+(`%%` lines are comments: they don't change validation, rendering or export.)
+On a re-run the agent:
+
+1. runs `changed-since.mjs <map-dir> --repo media-viewer=../media-viewer`, which
+   diffs each recorded commit against `HEAD` (read-only git) and maps the
+   changed files onto diagrams through the evidence — `%% evidence` comments
+   and/or a `RULES.md` table with an Evidence column. It lists affected
+   diagrams (and the rules/elements behind them), rules whose evidence file was
+   deleted or renamed, and changed files no rule covers (possible new flows);
+2. re-traces only the affected diagrams and edits them minimally — existing ids
+   and unchanged labels stay verbatim, new elements get new ids, unaffected
+   diagrams stay byte-identical;
+3. validates and lints, then runs `diff-map.mjs old.mmd new.mmd` to check that
+   every semantic change (node/flow added, removed, relabelled, retyped, moved)
+   is intended — including catching "id churn", where an element was
+   re-created under a new id;
+4. bumps the `%% source:` line of re-traced diagrams to the new commit, fixes
+   the evidence line numbers, and re-renders only what changed.
+
+The result is a small, reviewable diff instead of a full regeneration. The
+conventions are specified in `skill/references/dsl-spec.md` (Part 4) and the
+procedure in `skill/SKILL.md` ("Update mode").
 
 ## Layout
 
@@ -113,8 +156,9 @@ the full workflow and modeling rules.
     self-correcting error catalogue.
   - `references/mapping-playbook.md` — code→BPMN heuristics + worked
     examples.
-  - `scripts/` — `validate.mjs`, `lint.mjs` (+ `lint.test.mjs`,
-    `test-fixtures/`), `export-xml.mjs`, `render.mjs`, plus
+  - `scripts/` — `validate.mjs`, `lint.mjs`, `export-xml.mjs`, `render.mjs`,
+    `changed-since.mjs`, `diff-map.mjs` (tests: `lint.test.mjs`,
+    `update.test.mjs`, fixtures in `test-fixtures/`), plus
     `vendor/bpmn-core.mjs` (the vendored parser bundle) and
     `lib/rebuild.mjs` (regenerates that bundle from the fork).
   - `examples/` — validated `.mmd` files (+ `.bpmn`, `.svg`).

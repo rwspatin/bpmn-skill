@@ -4,6 +4,8 @@ This is the reference the mapper writes against. Part 1 is the prompt-ready spec
 (paste it into a system prompt when delegating generation). Part 2 is the complete
 semantic-error catalogue — each error already tells you the fix, so the loop is:
 generate → `validate.mjs` → paste the errors back → regenerate → repeat until VALID.
+Part 3 lists the style-lint warnings. Part 4 defines the provenance/evidence
+comments that make incremental updates possible.
 
 ---
 
@@ -173,3 +175,82 @@ false positives.
 - **L8** — a task/gateway/event label looks like a code identifier (`_`, `()`, `::`,
   a dotted.path, camelCase/PascalCase with no spaces) or equals its own element id.
   → use plain business language, not function/table/variable names.
+
+---
+
+## Part 4 — map provenance & evidence (for update mode)
+
+A **map** is a directory of diagrams for one codebase: `NN-capability.mmd` (+ the
+optional `.svg` / `.bpmn` / `.png` renders) and, optionally, a `RULES.md` catalogue of
+the business rules the diagrams draw. Two conventions let `changed-since.mjs` work
+out which diagrams a code change touches, so a re-run edits only those (see
+"Update mode" in `SKILL.md`). Both are plain `%%` comments: the parser ignores
+them, so they never change validation, lint, the export, or `diff-map.mjs`.
+
+**Provenance (required on every new map).** In each `.mmd` header, one line per
+source repo the diagram was traced from:
+
+```
+%% source: <repo-name> <full-commit-sha> <YYYY-MM-DD>
+%% source: order-service 3f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39 2026-09-26
+```
+
+- `<repo-name>` is a stable short name (usually the repo's directory/remote name);
+  it is what `--repo <name>=<path>` and the evidence below refer to.
+- `<full-commit-sha>` is `git rev-parse HEAD` of that repo when you traced it
+  (40 hex chars; a 7+ char prefix is accepted but full is preferred). It is the
+  authoritative "since" point. Uncommitted work is not captured — trace from a
+  committed state.
+- `<YYYY-MM-DD>` is the date you traced it (human context only).
+- A diagram with no `%% source:` line inherits the union of the map's other source
+  lines (with a warning). Free-text lines such as `%% Source: OrderController…`
+  are fine — only `source: <name> <hex-sha>` is read as provenance.
+
+**Evidence.** Where the code backs each element. Either or both:
+
+1. In the diagram, one comment per element (or diagram-wide without an id):
+   ```
+   %% evidence t1: order-service:src/orders/review.ts:12-40
+   %% evidence g1: order-service:src/orders/stock.ts:8; src/orders/policy.ts:3
+   %% evidence: order-service:src/orders/router.ts
+   ```
+2. In `RULES.md` — a markdown table whose header has an **Evidence** (or Source /
+   Code / Where) column and, ideally, a **Diagram** column. One row per rule:
+   ```
+   | ID  | Rule                     | Diagram · element | Evidence |
+   |-----|--------------------------|-------------------|----------|
+   | R-1 | Orders are reviewed      | 01 · t1           | `order-service:src/orders/review.ts:12-40` |
+   | R-2 | Only in-stock items ship | 01 · g1 → t3      | `order-service` `src/orders/stock.ts:8`; `policy.ts:3` |
+   ```
+   - **Rule id:** the first cell when it looks like an id (`R-1`, `BR12`), else
+     `RULES.md:<line>`.
+   - **Diagram link:** the diagram basename anywhere in the row (in backticks, or
+     bare if it contains a digit/`-`/`_`), or in the Diagram column either the
+     basename or its numeric prefix (`01` → `01-client-and-limits.mmd`). Ids in the
+     Diagram column that exist in that diagram are reported as affected
+     elements. Rows with no link inherit a diagram named in the enclosing
+     heading (e.g. a heading ending in the backticked basename `01-checkout`);
+     rows under a heading with none are "unlinked" (still checked, reported
+     separately). A backticked repo name in a heading sets the default repo for
+     the paths below it.
+   - List items and paragraphs with evidence are read too (as unlinked rules unless
+     they or their heading name a diagram).
+
+Accepted evidence forms (backtick each reference in markdown):
+
+| Form | Example | Repo resolved from |
+|---|---|---|
+| `repo:path[:lines]` | `order-service:src/orders/review.ts:12-40` | the prefix |
+| `repo` then `path[:lines]` | `order-service` `src/a.ts:3`; `b.ts:9` | the preceding repo span (applies to the rest of the cell) |
+| `path[:lines]` | `src/orders/review.ts:12` | a repo in backticks in the enclosing heading, else the only source repo, else any source repo |
+
+Paths name **files** (they need an extension, e.g. `.ts`, `.cs`, `.json`, or a
+glob) and match as a suffix on segment boundaries: `review.ts`, `orders/review.ts`
+and `src/orders/review.ts` all match `src/orders/review.ts`. A multi-segment path
+may also start after a `.` in a segment, so the common .NET abbreviation
+`Domain/Orders/Order.cs` matches `src/Core/Acme.Orders.Domain/Orders/Order.cs`.
+`...` or `**` match any run of directories (`Infrastructure/.../Store.cs`), `*`
+matches inside one segment, `{A,B}` is an alternation
+(`Api/{Orders,Quotes}Controller.cs`). Line suffixes (`:12`, `:12-40,55`, `:120+`,
+`#L12`) are recorded for humans; matching is per file. Evidence that matches no
+tracked file at HEAD is listed by `changed-since.mjs` so you can fix it.

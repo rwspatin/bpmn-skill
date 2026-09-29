@@ -16,6 +16,11 @@ payment"), never function or table names.
 
 ## Workflow
 
+0. **Map already exists?** If the target map directory already has `.mmd` diagrams
+   for this codebase, **do not regenerate it from scratch** — follow
+   [Update mode](#update-mode-map-already-exists) instead: re-trace only what the
+   code changes touched and keep every existing id and unchanged label as-is.
+   Steps 1–6 below are for a new map (or for a new diagram update mode asks for).
 1. **Discover** the business flows in the codebase. Inventory business entry points,
    cluster them by capability, then trace a happy path and its decisions/outcomes
    across controllers, consumers, schedulers, state transitions, webhooks, and
@@ -37,6 +42,62 @@ payment"), never function or table names.
    `CLEAN`, **or** each remaining warning is a deliberate, documented exception.
 6. **Deliver** `.mmd`, and when asked: `scripts/render.mjs` for a `.svg` preview and
    `scripts/export-xml.mjs` for a `.bpmn` file the user can open in bpmn.io.
+   Every delivered `.mmd` **must** carry provenance in its header — one
+   `%% source: <repo-name> <full-commit-sha> <YYYY-MM-DD>` line per source repo
+   (`git -C <repo> rev-parse HEAD`) — and should carry evidence for its elements
+   (`%% evidence <id>: repo:path:line` comments, and/or a `RULES.md` table with an
+   Evidence column); see `references/dsl-spec.md` Part 4. Without them the next
+   run cannot update the map incrementally.
+
+## Update mode (map already exists)
+
+Goal: a re-run produces a **small, meaningful diff** — only flows the code change
+touched move, everything else stays byte-identical. Never renumber, rename or
+re-sort what already exists.
+
+1. **Scout.** `node scripts/changed-since.mjs <map-dir> --repo <name>=<path> …`
+   (one `--repo` per `%% source:` repo). It diffs each recorded sha against HEAD
+   (read-only git) and lists AFFECTED diagrams (+ the rules/elements whose
+   evidence changed), POSSIBLY AFFECTED diagrams (no evidence to narrow it down),
+   STALE rules (evidence file deleted/renamed), changed files matching no rule,
+   and evidence that matches no file. Exit 0 = up to date → stop and say so.
+   If the map has no `%% source:` lines (legacy map), ask for or find the commit
+   it was traced at (e.g. `git log --before=<map date> -1`), add the lines, and
+   re-run; if that is unknowable, say so and treat every diagram as possibly
+   affected.
+2. **Re-trace only affected diagrams/rules** against the new code (the playbook
+   §2 trace, scoped to the changed files and the elements listed). Unaffected
+   diagrams are left **byte-identical** — do not reformat, re-comment or
+   re-render them.
+3. **Investigate unmatched changed files.** For each cluster that looks like a
+   business entry point (new route/consumer/cron/webhook/status), decide whether
+   it introduces a new flow or branch. Say so explicitly: extend an existing
+   diagram, propose a new one (new diagrams go through steps 1–6), or state that
+   it is plumbing.
+4. **Edit the existing `.mmd` minimally.** Keep the old version for step 6
+   (`git show HEAD:<file>` if the map is versioned, else copy it first).
+   - Never renumber or rename existing ids; keep unchanged labels **verbatim**.
+   - New elements get **new** ids (next free number in the diagram's scheme).
+   - Behaviour that was removed from the code is removed from the diagram; a
+     changed decision/outcome is a relabel or a rewired flow on the same ids.
+   - Keep declaration/flow order and comments; add new lines next to related ones.
+5. **Validate + lint** (`validate.mjs`, `lint.mjs`) until VALID and CLEAN.
+6. **Semantic diff.** `node scripts/diff-map.mjs <old.mmd> <new.mmd>` lists nodes
+   added/removed/relabelled/retyped/moved and flows added/removed/relabelled/
+   default-changed. Check that **every** reported change is intended and backed
+   by the code change. Fix every `ID CHURN` line (same type + label under a new
+   id) by restoring the old id.
+7. **Update provenance and evidence.** Set the `%% source:` line(s) of each
+   re-traced diagram to the new HEAD sha and today's date. Unaffected diagrams
+   keep their old line (it is still true, and they stay byte-identical);
+   `changed-since.mjs` diffs each diagram from its own sha. In `RULES.md` /
+   `%% evidence` comments, update rows whose evidence changed — **line numbers
+   move**, re-check them — fix or drop STALE rows, and add rows for new elements.
+8. **Re-render only changed diagrams**: regenerate `.svg` / `.bpmn` (and `.png` if
+   the project keeps them) for the diagrams whose `.mmd` changed, nothing else.
+9. **Report the semantic diff** to the user per diagram (from `diff-map.mjs`),
+   plus unmatched files you judged to be new flows or plumbing, and anything left
+   unverified.
 
 ## Scripts
 
@@ -47,10 +108,14 @@ node scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or
 node scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1); exit 2 if it fails validate first
 node scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
 node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real glyphs/swimlanes)
+node scripts/changed-since.mjs <map-dir> --repo <name>=<path> [--json]  # -> diagrams/rules touched since each '%% source:' sha (exit 0 none / 1 affected / 2 error)
+node scripts/diff-map.mjs   old.mmd new.mmd [--json]    # -> semantic diff by id + id-churn hints (exit 0 none / 1 changes / 2 parse error)
 ```
 
-- `validate.mjs`, `lint.mjs` and `export-xml.mjs` use a **vendored, self-contained parser
+- `validate.mjs`, `lint.mjs`, `export-xml.mjs` and `diff-map.mjs` use a **vendored, self-contained parser
   bundle** (`scripts/vendor/bpmn-core.mjs`) — no build, no network, works offline.
+- `changed-since.mjs` needs `git` and only runs read-only git commands
+  (`rev-parse`, `cat-file`, `log`, `diff`, `ls-files`); it never checks out, pulls or stashes.
 - `render.mjs` needs the Mermaid fork checked out **and built**
   (`cd <fork> && pnpm build:mermaid`) because rendering uses the full renderer in
   headless Chromium (via the fork's Playwright). Point it at the fork with
@@ -105,7 +170,8 @@ business alternative (exception/timeout/cancellation) is actually represented.
 ## References
 
 - `references/dsl-spec.md` — the prompt-ready condensed DSL spec + the full
-  self-correcting error catalogue (every message with its fix).
+  self-correcting error catalogue (every message with its fix), the lint rules,
+  and (Part 4) the `%% source:` / evidence conventions used by update mode.
 - `references/mapping-playbook.md` — code→BPMN heuristics per stack signal, the
   step-by-step modeling procedure, and two worked examples.
 
@@ -115,7 +181,8 @@ business alternative (exception/timeout/cancellation) is actually represented.
 `order-fulfillment.mmd` (+ `.bpmn`, `.svg`) — pools, lanes, message flow;
 `broken-example.mmd` — deliberately invalid, run `validate.mjs` on it to see the
 catalogue in action; `media-viewer-upload.mmd` (+ `.bpmn`, `.svg`) — a real flow
-mapped end-to-end from an Express app.
+mapped end-to-end from an Express app, with `%% source:` provenance and
+`%% evidence` comments.
 
 ## Scope
 

@@ -1,6 +1,12 @@
 %% Business flow: uploading media in media-viewer (Express + object storage).
 %% Reconstructed from POST /upload, requireAuth, the file check, PutObject, and
 %% the response. Object storage is an implementation detail, not a participant.
+%% source: media-viewer b97c9bf93725c4585e1bdf2078e4f7f8ee7467b2 2026-09-24
+%% evidence s1: media-viewer:server.js:313
+%% evidence g1: media-viewer:server.js:87-90
+%% evidence g2: media-viewer:server.js:315
+%% evidence t1: media-viewer:server.js:318-328
+%% evidence t2: media-viewer:server.js:329
 bpmn LR
   pool "Customer"
     start c0 "Upload needed"
