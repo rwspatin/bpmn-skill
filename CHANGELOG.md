@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `skill/scripts/vendor/README.md`: where the vendored parser bundle comes from
+  (fork commit, esbuild version, build settings), its SHA-256, and how to
+  reproduce it byte for byte.
+- `lib/rebuild.mjs` now prints the fork commit and the bundle's SHA-256.
+
 ## [1.0.0] - 2026-09-29
 
 First versioned release. Everything below already existed at this point;

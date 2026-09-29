@@ -11,7 +11,8 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FORK = process.env.BPMN_MERMAID_FORK;
@@ -37,4 +38,10 @@ execFileSync(process.execPath, [tsxCli, builder, FORK, out], {
   cwd: FORK,
   stdio: 'inherit',
 });
+
+// Compare with the value recorded in scripts/vendor/README.md to confirm a byte-identical rebuild.
+const sha256 = createHash('sha256').update(readFileSync(out)).digest('hex');
+const forkCommit = execFileSync('git', ['-C', FORK, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+console.log(`fork commit ${forkCommit}`);
+console.log(`sha256 ${sha256}`);
 void pathToFileURL;

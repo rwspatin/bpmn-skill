@@ -205,7 +205,8 @@ procedure in `skill/SKILL.md` ("Update mode").
   - `scripts/` — `validate.mjs`, `lint.mjs`, `export-xml.mjs`, `render.mjs`,
     `changed-since.mjs`, `diff-map.mjs` (tests: `lint.test.mjs`,
     `update.test.mjs`, fixtures in `test-fixtures/`), plus
-    `vendor/bpmn-core.mjs` (the vendored parser bundle) and
+    `vendor/bpmn-core.mjs` (the vendored parser bundle; its source commit,
+    SHA-256 and how to reproduce it byte for byte are in `vendor/README.md`) and
     `lib/rebuild.mjs` (regenerates that bundle from the fork).
   - `examples/` — validated `.mmd` files (+ `.bpmn`, `.svg`).
 
