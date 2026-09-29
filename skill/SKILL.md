@@ -85,8 +85,14 @@ re-sort what already exists.
 6. **Semantic diff.** `node scripts/diff-map.mjs <old.mmd> <new.mmd>` lists nodes
    added/removed/relabelled/retyped/moved and flows added/removed/relabelled/
    default-changed. Check that **every** reported change is intended and backed
-   by the code change. Fix every `ID CHURN` line (same type + label under a new
-   id) by restoring the old id.
+   by the code change. Id-churn lines are **hints** (a node removed and one added
+   with the same type + label) — review every one: `ID CHURN` (same pool/lane
+   and a shared predecessor/successor) almost always means the element was
+   re-created, so restore the old id; `POSSIBLE CHURN` (different place or
+   neighbours) may be a genuinely different element. Restore the old id only
+   when it really is the same element. Flows have no ids, so identical flows on
+   the same endpoints are matched first and only the rest is reported as a
+   relabel/default change.
 7. **Update provenance and evidence.** Set the `%% source:` line(s) of each
    re-traced diagram to the new HEAD sha and today's date. Unaffected diagrams
    keep their old line (it is still true, and they stay byte-identical);
@@ -115,7 +121,8 @@ node scripts/diff-map.mjs   old.mmd new.mmd [--json]    # -> semantic diff by id
 - `validate.mjs`, `lint.mjs`, `export-xml.mjs` and `diff-map.mjs` use a **vendored, self-contained parser
   bundle** (`scripts/vendor/bpmn-core.mjs`) — no build, no network, works offline.
 - `changed-since.mjs` needs `git` and only runs read-only git commands
-  (`rev-parse`, `cat-file`, `log`, `diff`, `ls-files`); it never checks out, pulls or stashes.
+  (`rev-parse`, `cat-file`, `merge-base --is-ancestor`, `diff`, `ls-files`); it never
+  checks out, pulls or stashes.
 - `render.mjs` needs the Mermaid fork checked out **and built**
   (`cd <fork> && pnpm build:mermaid`) because rendering uses the full renderer in
   headless Chromium (via the fork's Playwright). Point it at the fork with

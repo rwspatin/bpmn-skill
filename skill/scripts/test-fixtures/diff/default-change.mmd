@@ -1,0 +1,21 @@
+%% source: shop 0123456789abcdef0123456789abcdef01234567 2026-09-01
+bpmn LR
+  pool "Customer"
+    start c0 "Order needed"
+    task:user c1 "Submit order"
+    end c2 "Order submitted"
+  pool "Shop"
+    lane "Sales"
+      start message s1 "Receive order"
+      task:user t1 "Review order"
+      xor g1 "Items available?"
+    lane "Warehouse"
+      task:user t2 "Pick and pack order"
+      task:user t3 "Dispatch order"
+      end e1 "Order shipped"
+      end e2 "Order backordered"
+  c0 --> c1 --> c2
+  s1 --> t1 --> g1
+  g1 -- "Yes" --> t2 --> t3 --> e1
+  g1 -- "No" --> e2
+  c1 ==>|"Order"| s1

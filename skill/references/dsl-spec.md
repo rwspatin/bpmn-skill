@@ -240,7 +240,7 @@ Accepted evidence forms (backtick each reference in markdown):
 
 | Form | Example | Repo resolved from |
 |---|---|---|
-| `repo:path[:lines]` | `order-service:src/orders/review.ts:12-40` | the prefix |
+| `repo:path[:lines]` | `order-service:src/orders/review.ts:12-40` | the prefix — only when it is a known repo (a `%% source:` or `--repo` name); the path may start with anything, digits included |
 | `repo` then `path[:lines]` | `order-service` `src/a.ts:3`; `b.ts:9` | the preceding repo span (applies to the rest of the cell) |
 | `path[:lines]` | `src/orders/review.ts:12` | a repo in backticks in the enclosing heading, else the only source repo, else any source repo |
 
@@ -254,3 +254,11 @@ matches inside one segment, `{A,B}` is an alternation
 (`Api/{Orders,Quotes}Controller.cs`). Line suffixes (`:12`, `:12-40,55`, `:120+`,
 `#L12`) are recorded for humans; matching is per file. Evidence that matches no
 tracked file at HEAD is listed by `changed-since.mjs` so you can fix it.
+
+When a map's diagrams record **different** shas for one repo (re-traced diagrams
+were bumped, the others kept theirs), each diagram is checked from its own sha.
+Changed files that match no evidence are listed only since the descendant-most
+recorded sha (decided by git ancestry, not dates) — earlier changes were
+reviewed by the update that recorded it. If the recorded shas are on divergent
+histories (rebase, force-push, another branch), the list is the union from all
+of them and `changed-since.mjs` warns that it may repeat reviewed changes.

@@ -138,8 +138,10 @@ On a re-run the agent:
    diagrams stay byte-identical;
 3. validates and lints, then runs `diff-map.mjs old.mmd new.mmd` to check that
    every semantic change (node/flow added, removed, relabelled, retyped, moved)
-   is intended — including catching "id churn", where an element was
-   re-created under a new id;
+   is intended. It also hints at "id churn" — an element seemingly re-created
+   under a new id (same type + label): a strong hint when it sits in the same
+   pool/lane with a shared neighbour, a "possible" one otherwise. Every hint is
+   reviewed; the old id is restored only when it is really the same element;
 4. bumps the `%% source:` line of re-traced diagrams to the new commit, fixes
    the evidence line numbers, and re-renders only what changed.
 

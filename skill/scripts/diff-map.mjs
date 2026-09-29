@@ -5,11 +5,16 @@
  * Semantic diff of two BPMN DSL diagrams, via the vendored parser (so comments,
  * whitespace, indentation and statement order do not count as changes). Reports:
  *   - nodes added / removed / relabelled / retyped / moved (pool or lane), by id;
- *   - flows added / removed / relabelled / default-changed, keyed by
- *     (kind, source, target) — flows have no user ids in the DSL;
+ *   - flows added / removed / relabelled / default-changed. Flows have no ids in
+ *     the DSL, so they are matched as multisets: identical flows (kind, source,
+ *     target, default, label) pair first; only the unpaired rest is paired by
+ *     (kind, source, target) to report relabels / default changes;
  *   - pools / lanes added / removed (by label), direction change;
- *   - likely ID CHURN: a node removed and another added with the same type and
- *     label — reuse the old id so the diff (and any links to it) stays stable.
+ *   - id-churn HINTS: a node removed and another added with the same type and
+ *     label. 'ID CHURN' (strong) when it is also in the same pool/lane and shares
+ *     a predecessor/successor (by ids present in both) — restore the old id;
+ *     otherwise 'possible id churn' — review, it may be a genuinely different
+ *     element.
  *
  * Both files must pass validate.mjs (the parser rejects invalid diagrams).
  *
@@ -17,7 +22,7 @@
  *   exit 1 -> semantic changes (printed)
  *   exit 2 -> usage error, or a file does not parse/validate
  *
- * --json prints { changes: [...], idChurn: [...], summary: {...} }.
+ * --json prints { changes: [...], idChurn: [{..., confidence: strong|possible}], summary }.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -71,19 +76,8 @@ function containerOf(model, n) {
 }
 const q = (s) => JSON.stringify(s ?? '');
 const ARROW = { sequence: '-->', message: '==>', association: '-.-' };
-function flowKey(f) {
-  return `${f.kind}|${f.sourceId}|${f.targetId}`;
-}
-function indexFlows(model) {
-  const map = new Map();
-  for (const f of model.flows) {
-    let k = flowKey(f);
-    let i = 2;
-    while (map.has(k)) k = `${flowKey(f)}#${i++}`; // parallel duplicate flows
-    map.set(k, f);
-  }
-  return map;
-}
+const endpoints = (f) => `${f.kind}|${f.sourceId}|${f.targetId}`;
+const exactKey = (f) => `${endpoints(f)}|${f.isDefault ? 'default' : ''}|${norm(f.label)}`;
 const flowText = (f) => `${f.sourceId} ${ARROW[f.kind] ?? `-${f.kind}->`} ${f.targetId}`;
 const flowLabel = (f) => (f.isDefault ? '|default|' : norm(f.label) ? q(norm(f.label)) : '');
 
@@ -120,36 +114,90 @@ for (const [id, n] of newNodes) {
 }
 
 // ------------------------------------------------------------- flows ---------
-const oldFlows = indexFlows(oldM);
-const newFlows = indexFlows(newM);
-for (const [k, f] of oldFlows) {
-  if (!newFlows.has(k)) changes.push({ type: 'flow-removed', flow: flowText(f), kind: f.kind, sourceId: f.sourceId, targetId: f.targetId, label: flowLabel(f) });
-}
-for (const [k, f] of newFlows) {
-  const o = oldFlows.get(k);
-  if (!o) {
-    changes.push({ type: 'flow-added', flow: flowText(f), kind: f.kind, sourceId: f.sourceId, targetId: f.targetId, label: flowLabel(f) });
-    continue;
+// Flows have no ids and several may share endpoints (g -- "Yes" --> e plus
+// g -- "No" --> e), so match them as multisets: first pair flows that are
+// identical (endpoints + default + label); only the unpaired remainder is then
+// paired by endpoints (-> relabel / default change); the rest is added/removed.
+function pairBy(olds, news, key) {
+  const pairs = [];
+  const pool = new Map();
+  for (const f of news) {
+    const k = key(f);
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(f);
   }
+  const restOld = [];
+  for (const f of olds) {
+    const cands = pool.get(key(f));
+    if (cands && cands.length) pairs.push([f, cands.shift()]);
+    else restOld.push(f);
+  }
+  const restNew = [...pool.values()].flat();
+  restNew.sort((a, b) => news.indexOf(a) - news.indexOf(b));
+  return { pairs, restOld, restNew };
+}
+const exact = pairBy(oldM.flows, newM.flows, exactKey);
+const byEnds = pairBy(exact.restOld, exact.restNew, endpoints);
+for (const f of byEnds.restOld) {
+  changes.push({ type: 'flow-removed', flow: flowText(f), kind: f.kind, sourceId: f.sourceId, targetId: f.targetId, label: flowLabel(f) });
+}
+for (const f of byEnds.restNew) {
+  changes.push({ type: 'flow-added', flow: flowText(f), kind: f.kind, sourceId: f.sourceId, targetId: f.targetId, label: flowLabel(f) });
+}
+for (const [o, f] of byEnds.pairs) {
   if (Boolean(o.isDefault) !== Boolean(f.isDefault)) changes.push({ type: 'flow-default-changed', flow: flowText(f), from: Boolean(o.isDefault), to: Boolean(f.isDefault) });
   if (norm(o.label) !== norm(f.label)) changes.push({ type: 'flow-relabelled', flow: flowText(f), from: norm(o.label), to: norm(f.label) });
 }
 
 // ----------------------------------------------------------- id churn --------
+// Same type + label under a new id is only a HINT: a task can legitimately be
+// removed in one place and an identical one added elsewhere. It is reported as
+// strong 'ID CHURN' only when the context also matches — same pool/lane AND at
+// least one shared predecessor/successor among ids present in both diagrams;
+// otherwise as 'possible id churn' for review.
 const removed = changes.filter((c) => c.type === 'node-removed');
 const added = changes.filter((c) => c.type === 'node-added');
+const stableIds = new Set([...oldNodes.keys()].filter((id) => newNodes.has(id)));
+function neighbours(model, id) {
+  const preds = new Set();
+  const succs = new Set();
+  for (const f of model.flows) {
+    if (f.kind !== 'sequence') continue;
+    if (f.targetId === id && stableIds.has(f.sourceId)) preds.add(f.sourceId);
+    if (f.sourceId === id && stableIds.has(f.targetId)) succs.add(f.targetId);
+  }
+  return { preds, succs };
+}
+const overlaps = (a, b) => [...a].some((x) => b.has(x));
 const idChurn = [];
 const usedAdded = new Set();
 for (const r of removed) {
-  const match = added.find((a) => !usedAdded.has(a.id) && a.nodeType === r.nodeType && a.label.toLowerCase() === r.label.toLowerCase());
-  if (!match) continue;
-  usedAdded.add(match.id);
+  const same = added.filter((a) => !usedAdded.has(a.id) && a.nodeType === r.nodeType && a.label.toLowerCase() === r.label.toLowerCase());
+  if (same.length === 0) continue;
+  const on = neighbours(oldM, r.id);
+  const scored = same.map((a) => {
+    const nn = neighbours(newM, a.id);
+    const sameContainer = a.container === r.container;
+    const sharedNeighbour = overlaps(on.preds, nn.preds) || overlaps(on.succs, nn.succs);
+    return { a, sameContainer, sharedNeighbour, strong: sameContainer && sharedNeighbour };
+  });
+  scored.sort((x, y) => Number(y.strong) - Number(x.strong) || Number(y.sharedNeighbour) - Number(x.sharedNeighbour) || Number(y.sameContainer) - Number(x.sameContainer));
+  const best = scored[0];
+  usedAdded.add(best.a.id);
+  const why = [
+    best.sameContainer ? `same container [${r.container}]` : `container differs ([${r.container}] -> [${best.a.container}])`,
+    best.sharedNeighbour ? 'shares a predecessor/successor' : 'no shared predecessor/successor',
+  ].join(', ');
   idChurn.push({
     oldId: r.id,
-    newId: match.id,
+    newId: best.a.id,
     nodeType: r.nodeType,
     label: r.label,
-    fix: `rename '${match.id}' back to '${r.id}' in the new diagram (declaration and flows) — same ${r.nodeType} "${r.label}", only the id changed.`,
+    confidence: best.strong ? 'strong' : 'possible',
+    context: why,
+    fix: best.strong
+      ? `rename '${best.a.id}' back to '${r.id}' in the new diagram (declaration and flows) — same ${r.nodeType} "${r.label}" in the same place, only the id changed.`
+      : `review: if '${best.a.id}' is the same element as the removed '${r.id}', restore the old id '${r.id}'; if it is genuinely a different element (${why}), keep both changes.`,
   });
 }
 
@@ -182,7 +230,13 @@ if (jsonOut) {
       default: console.log(`? ${JSON.stringify(c)}`);
     }
   }
-  for (const ch of idChurn) console.log(`! ID CHURN        '${ch.oldId}' removed and '${ch.newId}' added as the same ${ch.nodeType} ${q(ch.label)}. Fix: ${ch.fix}`);
-  console.log(`\n${changes.length} semantic change(s)${idChurn.length ? `, ${idChurn.length} likely id churn` : ''}.`);
+  for (const ch of idChurn) {
+    const tag = ch.confidence === 'strong' ? '! ID CHURN       ' : '? POSSIBLE CHURN ';
+    console.log(`${tag} '${ch.oldId}' removed and '${ch.newId}' added as the same ${ch.nodeType} ${q(ch.label)} (${ch.context}). Fix: ${ch.fix}`);
+  }
+  const strong = idChurn.filter((c) => c.confidence === 'strong').length;
+  const possible = idChurn.length - strong;
+  const churnNote = [strong ? `${strong} id churn` : '', possible ? `${possible} possible id churn to review` : ''].filter(Boolean).join(', ');
+  console.log(`\n${changes.length} semantic change(s)${churnNote ? `, ${churnNote}` : ''}.`);
 }
 process.exit(changes.length === 0 ? 0 : 1);

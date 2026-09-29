@@ -18,11 +18,13 @@
  *   - STALE rules: an evidence file was deleted or renamed away;
  *   - affected rules that are not linked to any diagram;
  *   - changed files matching NO evidence (possible new flows to consider), since
- *     the newest recorded sha of each repo (older changes were already reviewed);
+ *     the descendant-most recorded sha of each repo (by ancestry — older changes
+ *     were already reviewed; divergent provenance commits: union + warning);
  *   - evidence refs that match no tracked file at HEAD (typos / stale paths);
  *   - unaffected diagrams (leave them byte-identical).
  *
- * Only read-only git commands are used (rev-parse, cat-file, log, diff, ls-files). The map and
+ * Only read-only git commands are used (rev-parse, cat-file, merge-base
+ * --is-ancestor, diff, ls-files). The map and
  * the repos are never modified.
  *
  *   exit 0 -> nothing affected
@@ -31,7 +33,8 @@
  *
  * Evidence forms understood (RULES.md tables, list items, paragraphs, and
  * `%% evidence:` comments):
- *   `repo:path/to/File.ts:12-40`          repo-qualified, with or without lines
+ *   `repo:path/to/File.ts:12-40`          repo-qualified (repo must be a source/--repo
+ *                                          name), with or without lines
  *   `repo` `path/to/File.ts:12`; `Other.ts:3`   repo span, then paths inheriting it
  *   `path/to/File.ts:12`                  repo from the row / section heading, or
  *                                          the only source repo, else any repo
@@ -43,7 +46,7 @@
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, resolve, basename } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 // ---------------------------------------------------------------- args -------
 const argv = process.argv.slice(2);
@@ -114,6 +117,9 @@ for (const d of diagrams) {
   for (const [repo, shas] of mapSources) for (const sha of shas) d.sources.push({ repo, sha, date: null, inherited: true });
 }
 const knownRepos = new Set([...mapSources.keys()]);
+// Names recognised in evidence: source repos plus any extra --repo names (refs to
+// the latter are reported as unchecked — they have no '%% source:' sha).
+const recognisedRepos = new Set([...knownRepos, ...repoPaths.keys()]);
 for (const r of repoPaths.keys()) if (!knownRepos.has(r)) warnings.push(`--repo ${r} is not a source of this map (ignored)`);
 for (const r of knownRepos) if (!repoPaths.has(r)) fail(`no --repo given for source repo '${r}' (pass --repo ${r}=<path>)`);
 
@@ -152,15 +158,30 @@ for (const [name, shas] of mapSources) {
     }
     diffs.set(sha, parseNameStatusZ(out));
   }
-  // Newest recorded sha (by committer time): changes before it were already
-  // reviewed by the update that recorded it, so "unmatched" files start there.
-  let newest = null;
-  let newestTime = -1;
-  for (const sha of shas) {
-    const t = Number(git(path, ['log', '-1', '--format=%ct', sha]).trim());
-    if (t > newestTime) { newest = sha; newestTime = t; }
+  // Frontier of recorded shas by ANCESTRY (not timestamps): a sha that is an
+  // ancestor of another recorded sha was superseded by a later update, whose
+  // review already covered the changes in between. "Unmatched" files are listed
+  // from the frontier. One frontier sha = linear history (the normal case). Several
+  // = provenance commits on divergent histories (rebase/force-push/other branch):
+  // we cannot tell which changes were reviewed, so we list the union from all of
+  // them (may repeat already-reviewed files) and warn.
+  const full = new Map();
+  for (const sha of shas) full.set(sha, git(path, ['rev-parse', '--verify', `${sha}^{commit}`]).trim());
+  const distinct = [...new Set(full.values())];
+  const frontierFull = distinct.filter((a) => !distinct.some((b) => b !== a && isAncestor(path, a, b)));
+  const frontier = [...shas].filter((sha, i, arr) => frontierFull.includes(full.get(sha)) && arr.findIndex((x) => full.get(x) === full.get(sha)) === i);
+  if (frontier.length > 1) {
+    warnings.push(`repo '${name}': recorded source commits ${frontier.map((x) => x.slice(0, 10)).join(', ')} are on divergent histories (neither is an ancestor of the other) — unmatched files are listed from all of them and may include changes already reviewed`);
   }
-  repos.set(name, { name, path, head, diffs, newest });
+  repos.set(name, { name, path, head, diffs, frontier });
+}
+
+// git merge-base --is-ancestor: exit 0 = yes, 1 = no, anything else = error.
+function isAncestor(repoDir, a, b) {
+  const r = spawnSync('git', ['-C', repoDir, 'merge-base', '--is-ancestor', a, b], { encoding: 'utf8' });
+  if (r.status === 0) return true;
+  if (r.status === 1) return false;
+  fail(`git merge-base --is-ancestor ${a} ${b} failed in ${repoDir} (${(r.stderr || '').trim().split('\n')[0]})`);
 }
 
 function parseNameStatusZ(out) {
@@ -180,6 +201,11 @@ function parseNameStatusZ(out) {
   return changes;
 }
 
+function dedupeChanges(list) {
+  const seen = new Map();
+  for (const c of list) seen.set(`${c.status}\t${c.oldPath ?? ''}\t${c.path}`, c);
+  return [...seen.values()];
+}
 // Union of all changes for a repo (dedupe by status+path).
 function unionChanges(repoName) {
   const r = repos.get(repoName);
@@ -220,12 +246,14 @@ function stripLines(s) {
 function parseToken(tok, strict = false) {
   const t = tok.trim().replace(/^\.\//, '');
   if (!t) return null;
-  if (knownRepos.has(t)) return { repoMarker: t };
+  if (recognisedRepos.has(t)) return { repoMarker: t };
   // repo:path[:lines]
+  // A `name:` prefix is a repo only when it is a known repo (source line or
+  // --repo); then the rest is a path whatever it starts with (digits included).
   const m = t.match(/^([\w.-]+):(.+)$/);
-  if (m && !m[1].includes('/') && !/^\d/.test(m[2])) {
+  if (m && recognisedRepos.has(m[1])) {
     const p = stripLines(m[2]);
-    if (looksLikePath(p) && (knownRepos.has(m[1]) || !/\.[A-Za-z]/.test(m[1]))) return { repo: m[1], pattern: p };
+    return looksLikePath(p) ? { repo: m[1], pattern: p } : null;
   }
   const p = stripLines(t);
   if (looksLikePath(p) && (!strict || p.includes('/') || p !== t)) return { repo: null, pattern: p };
@@ -304,7 +332,7 @@ function diagramsNamedIn(text, bare = false) {
   return found;
 }
 function repoNamedIn(text) {
-  for (const m of text.matchAll(/`([^`]+)`/g)) if (knownRepos.has(m[1].trim())) return m[1].trim();
+  for (const m of text.matchAll(/`([^`]+)`/g)) if (recognisedRepos.has(m[1].trim())) return m[1].trim();
   return null;
 }
 const splitRow = (line) => {
@@ -491,7 +519,7 @@ for (const d of diagrams) {
 }
 const unlinkedAffectedRules = [...affectedRules.values()].filter((a) => a.rule.diagrams.length === 0);
 const unmatched = [];
-for (const [repo, r] of repos) for (const c of r.diffs.get(r.newest)) {
+for (const [repo, r] of repos) for (const c of dedupeChanges(r.frontier.flatMap((sha) => r.diffs.get(sha)))) {
   if (!matchedChangeKeys.has(changeKey(repo, c))) unmatched.push({ repo, ...c });
 }
 const unaffected = diagrams.filter((d) => !affected.has(d.name) && !possiblyAffected.some((p) => p.diagram === d));

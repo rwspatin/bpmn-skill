@@ -1,0 +1,13 @@
+%% "Yes" g1 -> g2 removed (only "No" kept); g2 -> e2 labelled "Pickup" removed, default kept.
+bpmn LR
+  pool "Shop"
+    start s1 "Order received"
+    xor g1 "Gift wrap requested?"
+    xor g2 "Express shipping?"
+    task:service t1 "Ship express"
+    end e2 "Order handed over"
+  s1 --> g1
+  g1 -- "No" --> g2
+  g1 -->|default| g2
+  g2 -- "Yes" --> t1 --> e2
+  g2 -->|default| e2

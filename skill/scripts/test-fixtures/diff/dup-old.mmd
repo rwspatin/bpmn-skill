@@ -1,0 +1,14 @@
+%% Two flows share endpoints g1 -> e2 ("Yes" and "No"), plus a default on g2 -> e2.
+bpmn LR
+  pool "Shop"
+    start s1 "Order received"
+    xor g1 "Gift wrap requested?"
+    xor g2 "Express shipping?"
+    task:service t1 "Ship express"
+    end e2 "Order handed over"
+  s1 --> g1
+  g1 -- "Yes" --> g2
+  g1 -- "No" --> g2
+  g2 -- "Yes" --> t1 --> e2
+  g2 -->|default| e2
+  g2 -- "Pickup" --> e2
