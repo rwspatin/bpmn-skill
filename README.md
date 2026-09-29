@@ -55,6 +55,45 @@ self-correcting error catalogue in action.
 
 ## Install
 
+### Option A: Claude Code plugin (recommended)
+
+This repo is its own [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugins/create-marketplace)
+(`.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json`). Install
+from your shell:
+
+```sh
+claude plugin marketplace add rwspatin/bpmn-skill
+claude plugin install bpmn-mapper@rwspatin
+```
+
+Or, in one step from inside a Claude Code session (requires Claude Code
+v2.1.275+):
+
+```
+/plugin install bpmn-mapper --marketplace rwspatin/bpmn-skill
+```
+
+Get updates later with:
+
+```sh
+claude plugin update bpmn-mapper@rwspatin
+```
+
+The plugin's `plugin.json` intentionally omits `version`, so Claude Code
+tracks the marketplace repo's commit SHA — every push to `main` is an update,
+no version bump needed.
+
+Plugin skills are namespaced under the plugin's name when invoked directly
+(e.g. `/bpmn-mapper:...`), but this skill is primarily **model-invoked**:
+Claude auto-triggers it from its description (the "mapear
+fluxos/processos", "gerar BPMN do código", "business process from code"
+phrases in `skill/SKILL.md`'s frontmatter) rather than needing an explicit
+slash command. Run `claude plugin details bpmn-mapper` after installing to
+see the exact skill name and invocation Claude Code registered for your
+version.
+
+### Option B: manual symlink
+
 1. Clone this repo:
    ```sh
    git clone https://github.com/rwspatin/bpmn-skill.git
@@ -151,8 +190,13 @@ procedure in `skill/SKILL.md` ("Update mode").
 
 ## Layout
 
+- `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` — make
+  this repo installable as a Claude Code plugin (`bpmn-mapper@rwspatin`, see
+  [Install](#install)). `plugin.json`'s `skills` field points at `./skill/`
+  directly, so the skill's files stay exactly where the manual-symlink
+  install expects them — no files moved.
 - `skill/` — the skill itself (this is what you symlink into
-  `~/.claude/skills/bpmn-mapper`).
+  `~/.claude/skills/bpmn-mapper` for a manual install).
   - `SKILL.md` — name, triggers (PT + EN), workflow, modeling rules.
   - `references/dsl-spec.md` — prompt-ready DSL spec + the full
     self-correcting error catalogue.

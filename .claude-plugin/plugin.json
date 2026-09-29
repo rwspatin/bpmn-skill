@@ -1,0 +1,21 @@
+{
+  "name": "bpmn-mapper",
+  "displayName": "BPMN Mapper",
+  "description": "Reconstruct an application's business processes from its code and emit validated BPMN as Mermaid `bpmn` DSL, with optional SVG render and BPMN 2.0 XML export for bpmn.io.",
+  "author": {
+    "name": "Renan Spatin"
+  },
+  "homepage": "https://github.com/rwspatin/bpmn-skill",
+  "repository": "https://github.com/rwspatin/bpmn-skill",
+  "license": "MIT",
+  "keywords": [
+    "bpmn",
+    "mermaid",
+    "business-process",
+    "diagram",
+    "reverse-engineering",
+    "workflow",
+    "documentation"
+  ],
+  "skills": ["./skill/"]
+}

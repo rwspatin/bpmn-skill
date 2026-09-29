@@ -1,0 +1,14 @@
+{
+  "name": "rwspatin",
+  "description": "Renan Spatin's Claude Code plugins.",
+  "owner": {
+    "name": "Renan Spatin"
+  },
+  "plugins": [
+    {
+      "name": "bpmn-mapper",
+      "source": "./",
+      "description": "Reconstruct an application's business processes from its code and emit validated BPMN as Mermaid `bpmn` DSL."
+    }
+  ]
+}

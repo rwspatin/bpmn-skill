@@ -32,16 +32,17 @@ payment"), never function or table names.
    checklist below and the procedure in `references/mapping-playbook.md`.
 3. **Emit** the DSL following `references/dsl-spec.md` (Part 1 is prompt-ready and
    can be pasted into a sub-prompt if you delegate generation).
-4. **Validate & self-correct.** Run `scripts/validate.mjs <file.mmd>`. It prints
-   `VALID` or the semantic-error catalogue — each message contains the exact fix
+4. **Validate & self-correct.** Run `${CLAUDE_SKILL_DIR}/scripts/validate.mjs <file.mmd>`.
+   It prints `VALID` or the semantic-error catalogue — each message contains the exact fix
    (`references/dsl-spec.md` Part 2). Apply the fix, re-run, repeat until VALID.
    **Never ship un-validated DSL.**
-5. **Lint the style.** Once VALID, run `scripts/lint.mjs <file.mmd>`. It prints
-   `CLEAN` or method/style **warnings** (rules L1–L8, same self-correcting format as
-   the validator: rule id, element, problem, fix). Fix each warning and re-run until
+5. **Lint the style.** Once VALID, run `${CLAUDE_SKILL_DIR}/scripts/lint.mjs <file.mmd>`.
+   It prints `CLEAN` or method/style **warnings** (rules L1–L8, same self-correcting format
+   as the validator: rule id, element, problem, fix). Fix each warning and re-run until
    `CLEAN`, **or** each remaining warning is a deliberate, documented exception.
-6. **Deliver** `.mmd`, and when asked: `scripts/render.mjs` for a `.svg` preview and
-   `scripts/export-xml.mjs` for a `.bpmn` file the user can open in bpmn.io.
+6. **Deliver** `.mmd`, and when asked: `${CLAUDE_SKILL_DIR}/scripts/render.mjs` for a `.svg`
+   preview and `${CLAUDE_SKILL_DIR}/scripts/export-xml.mjs` for a `.bpmn` file the user can
+   open in bpmn.io.
    Every delivered `.mmd` **must** carry provenance in its header — one
    `%% source: <repo-name> <full-commit-sha> <YYYY-MM-DD>` line per source repo
    (`git -C <repo> rev-parse HEAD`) — and should carry evidence for its elements
@@ -55,7 +56,7 @@ Goal: a re-run produces a **small, meaningful diff** — only flows the code cha
 touched move, everything else stays byte-identical. Never renumber, rename or
 re-sort what already exists.
 
-1. **Scout.** `node scripts/changed-since.mjs <map-dir> --repo <name>=<path> …`
+1. **Scout.** `node ${CLAUDE_SKILL_DIR}/scripts/changed-since.mjs <map-dir> --repo <name>=<path> …`
    (one `--repo` per `%% source:` repo). It diffs each recorded sha against HEAD
    (read-only git) and lists AFFECTED diagrams (+ the rules/elements whose
    evidence changed), POSSIBLY AFFECTED diagrams (no evidence to narrow it down),
@@ -82,7 +83,7 @@ re-sort what already exists.
      changed decision/outcome is a relabel or a rewired flow on the same ids.
    - Keep declaration/flow order and comments; add new lines next to related ones.
 5. **Validate + lint** (`validate.mjs`, `lint.mjs`) until VALID and CLEAN.
-6. **Semantic diff.** `node scripts/diff-map.mjs <old.mmd> <new.mmd>` lists nodes
+6. **Semantic diff.** `node ${CLAUDE_SKILL_DIR}/scripts/diff-map.mjs <old.mmd> <new.mmd>` lists nodes
    added/removed/relabelled/retyped/moved and flows added/removed/relabelled/
    default-changed. Check that **every** reported change is intended and backed
    by the code change. Id-churn lines are **hints** (a node removed and one added
@@ -107,15 +108,21 @@ re-sort what already exists.
 
 ## Scripts
 
-Node >= 22 (the fork's toolchain needs it). From `skill/`:
+Node >= 22 (the fork's toolchain needs it). Scripts live in this skill's own
+`scripts/` directory. Reference them with `${CLAUDE_SKILL_DIR}`, which Claude
+Code substitutes to this skill's own directory — the plugin's `skill/`
+subdirectory when installed as a plugin, or the symlink target when installed
+by symlinking `skill/` into `~/.claude/skills/bpmn-mapper` — so the commands
+below resolve correctly either way, regardless of the current working
+directory:
 
 ```sh
-node scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or catalogue errors (exit 1)
-node scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1); exit 2 if it fails validate first
-node scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
-node scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real glyphs/swimlanes)
-node scripts/changed-since.mjs <map-dir> --repo <name>=<path> [--json]  # -> diagrams/rules touched since each '%% source:' sha (exit 0 none / 1 affected / 2 error)
-node scripts/diff-map.mjs   old.mmd new.mmd [--json]    # -> semantic diff by id + id-churn hints (exit 0 none / 1 changes / 2 parse error)
+node ${CLAUDE_SKILL_DIR}/scripts/validate.mjs   path/to/flow.mmd            # -> "VALID" (exit 0) or catalogue errors (exit 1)
+node ${CLAUDE_SKILL_DIR}/scripts/lint.mjs       path/to/flow.mmd [--json]   # -> "CLEAN" (exit 0) or style warnings L1-L8 (exit 1); exit 2 if it fails validate first
+node ${CLAUDE_SKILL_DIR}/scripts/export-xml.mjs path/to/flow.mmd out.bpmn   # -> BPMN 2.0 XML with BPMNDI (bpmn.io-ready)
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs     path/to/flow.mmd out.svg    # -> headless SVG (real glyphs/swimlanes)
+node ${CLAUDE_SKILL_DIR}/scripts/changed-since.mjs <map-dir> --repo <name>=<path> [--json]  # -> diagrams/rules touched since each '%% source:' sha (exit 0 none / 1 affected / 2 error)
+node ${CLAUDE_SKILL_DIR}/scripts/diff-map.mjs   old.mmd new.mmd [--json]    # -> semantic diff by id + id-churn hints (exit 0 none / 1 changes / 2 parse error)
 ```
 
 - `validate.mjs`, `lint.mjs`, `export-xml.mjs` and `diff-map.mjs` use a **vendored, self-contained parser
