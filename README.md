@@ -79,9 +79,9 @@ Get updates later with:
 claude plugin update bpmn-mapper@rwspatin
 ```
 
-The plugin's `plugin.json` intentionally omits `version`, so Claude Code
-tracks the marketplace repo's commit SHA — every push to `main` is an update,
-no version bump needed.
+The plugin's `plugin.json` carries a semver `version` that's bumped on every
+release (see "Releasing" in `CHANGELOG.md`), so Claude Code can tell a new
+release apart from the one you already have.
 
 Plugin skills are namespaced under the plugin's name when invoked directly
 (e.g. `/bpmn-mapper:...`), but this skill is primarily **model-invoked**:

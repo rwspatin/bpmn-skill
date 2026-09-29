@@ -1,6 +1,7 @@
 {
   "name": "bpmn-mapper",
   "displayName": "BPMN Mapper",
+  "version": "1.0.0",
   "description": "Reconstruct an application's business processes from its code and emit validated BPMN as Mermaid `bpmn` DSL, with optional SVG render and BPMN 2.0 XML export for bpmn.io.",
   "author": {
     "name": "Renan Spatin"
