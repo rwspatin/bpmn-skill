@@ -3,19 +3,23 @@
 This repository's own code (the `bpmn-mapper` skill instructions, reference
 docs, and scripts) is licensed under the MIT License — see `LICENSE`.
 
-One file, `skill/scripts/vendor/bpmn-core.mjs`, is a compiled (esbuild)
-bundle: it is not hand-written, it is generated from
+One file, `skill/scripts/vendor/bpmn-core.mjs`, is a compiled and minified
+(esbuild) bundle: it is not hand-written, it is generated from
 [`rwspatin/mermaid`](https://github.com/rwspatin/mermaid) (branch
 `feat/bpmn-diagram`, a fork of [mermaid-js/mermaid](https://github.com/mermaid-js/mermaid))
 by `skill/scripts/lib/build-core.mts`, and it embeds source from that fork
 plus several of its runtime dependencies so that `validate.mjs` and
 `export-xml.mjs` can run standalone, offline, with no build step. This
 document lists every third-party package actually embedded in that bundle,
-as verified by inspecting its module-path comments (each bundled module is
-preceded by an esbuild comment naming its source path, e.g.
-`// node_modules/.pnpm/chevrotain@11.1.2/...`) against the fork's installed
-dependency versions. Nothing is listed here unless it is really present in
-the bundle.
+as verified against an esbuild `metafile` analysis of the build (the bundle
+itself is minified, so it no longer carries the per-module source-path
+comments an unminified esbuild bundle would; `metafile`, produced by the
+same `build()` call with `metafile: true`, lists every input module and its
+size independently of minification) cross-checked against the fork's
+installed dependency versions. `legalComments: 'eof'` is set on the build so
+license banners esbuild finds in bundled files (currently DOMPurify's and
+lodash-es's) are preserved verbatim at the end of `bpmn-core.mjs` — see them
+there. Nothing is listed here unless it is really present in the bundle.
 
 ## Bundled in `skill/scripts/vendor/bpmn-core.mjs`
 
@@ -34,7 +38,16 @@ the bundle.
   (yet) part of upstream Mermaid — see "Status & upstream tracking" in
   `README.md`. Everything else in this bundle (chevrotain, dayjs, dompurify,
   khroma, lodash-es) is an unmodified runtime dependency of Mermaid, pulled
-  in because the bundled Mermaid modules import them.
+  in because the bundled Mermaid modules import them. One exception:
+  `skill/scripts/lib/build-core.mts` replaces Mermaid's `themes/index.js`
+  (which eagerly imports all ~11 built-in colour themes, ~200KB) with a stub
+  that keeps the real `theme-default` module unmodified — the only theme
+  this bundle's code paths actually evaluate (see the comment at the top of
+  that file) — and no-ops the other 10 themes' `getThemeVariables`, which
+  `validate.mjs`/`lint.mjs`/`export-xml.mjs`/`diff-map.mjs` never call. Only
+  `theme-default` still imports `khroma` (for its colour computations), so
+  `khroma` stays bundled, just far smaller than before — it no longer also
+  carries the colour logic the other 10 themes used.
 
 ### Chevrotain (+ `@chevrotain/gast`, `@chevrotain/regexp-to-ast`, `@chevrotain/utils`)
 
