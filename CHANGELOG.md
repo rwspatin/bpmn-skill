@@ -14,6 +14,9 @@ this project uses [Semantic Versioning](https://semver.org/).
 - `lib/rebuild.mjs` now prints the fork commit and the bundle's SHA-256.
 - `SECURITY.md`: how to report a vulnerability privately and what each script
   executes.
+- CI: a plugin security scan (HOL plugin scanner, min score 80, fails on high
+  findings) and the test suite plus example validate/lint run on every push and
+  pull request. Dependabot keeps the pinned GitHub Actions up to date.
 
 ## [1.0.0] - 2026-09-29
 
