@@ -12,6 +12,8 @@ this project uses [Semantic Versioning](https://semver.org/).
   (fork commit, esbuild version, build settings), its SHA-256, and how to
   reproduce it byte for byte.
 - `lib/rebuild.mjs` now prints the fork commit and the bundle's SHA-256.
+- `SECURITY.md`: how to report a vulnerability privately and what each script
+  executes.
 
 ## [1.0.0] - 2026-09-29
 
