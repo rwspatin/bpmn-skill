@@ -4,10 +4,17 @@ All notable changes to this project are documented in this file. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.1] - 2026-10-02
+
+### Fixed
+
+- `validate.mjs`, `lint.mjs`, `diff-map.mjs` and `export-xml.mjs` crashed on
+  Windows (`ERR_UNSUPPORTED_ESM_URL_SCHEME`): the vendored bundle was imported by
+  a raw filesystem path; it is now imported through a `file://` URL.
 
 ### Added
 
+- CI runs the tests on Windows and macOS as well as Linux.
 - `skill/scripts/vendor/README.md`: where the vendored parser bundle comes from
   (fork commit, esbuild version, build settings), its SHA-256, and how to
   reproduce it byte for byte.

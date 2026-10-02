@@ -9,7 +9,7 @@
  * Requires Node >= 22. Uses the vendored parser/export bundle — no build needed.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -19,7 +19,7 @@ if (!file || !out) {
   process.exit(2);
 }
 
-const { toBpmnXml } = await import(resolve(here, 'vendor/bpmn-core.mjs'));
+const { toBpmnXml } = await import(pathToFileURL(resolve(here, 'vendor/bpmn-core.mjs')).href);
 
 const source = readFileSync(file, 'utf8');
 try {
